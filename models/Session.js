@@ -1,0 +1,45 @@
+const mongoose = require('mongoose');
+
+const sessionSchema = new mongoose.Schema(
+  {
+    teacherId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Teacher reference is required'],
+      index: true,
+    },
+    subject: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Subject cannot exceed 100 characters'],
+      default: 'General',
+    },
+    qrToken: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+      index: { expireAfterSeconds: 0 }, // TTL index – MongoDB auto-deletes expired docs
+    },
+  },
+  {
+    timestamps: true,
+    toJSON: { versionKey: false },
+  }
+);
+
+// ── Virtual: check if session is currently valid ─────────────────────────────
+sessionSchema.virtual('isValid').get(function () {
+  return this.isActive && new Date() < this.expiresAt;
+});
+
+module.exports = mongoose.model('Session', sessionSchema);
