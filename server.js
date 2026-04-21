@@ -24,10 +24,10 @@ const errorHandler = require('./middleware/errorHandler');
 const { sendError } = require('./utils/response');
 
 // ── Route imports ─────────────────────────────────────────────────────────────
-const authRoutes       = require('./routes/authRoutes');
-const sessionRoutes    = require('./routes/sessionRoutes');
+const authRoutes = require('./routes/authRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
-const batchRoutes=require("./routes/batchRoutes");
+const batchRoutes = require("./routes/batchRoutes");
 const subjectRoutes = require('./routes/subjectRoutes');
 
 
@@ -43,9 +43,12 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:3000')
-  .split(',')
-  .map((o) => o.trim());
+// This now pulls directly from your .env file
+const allowedOrigins = [
+  process.env.CLIENT_ORIGIN, 
+  'http://localhost:8080', // Your current dev URL
+  'http://localhost:3000'  // Just in case
+].filter(Boolean); // Removes any undefined values
 
 app.use(
   cors({
@@ -116,9 +119,9 @@ io.on('connection', (socket) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API Routes
 // ─────────────────────────────────────────────────────────────────────────────
-app.use('/api/auth',       authLimiter, authRoutes);
-app.use('/api/sessions',    apiLimiter,  sessionRoutes);
-app.use('/api/attendance', apiLimiter,  attendanceRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/sessions', apiLimiter, sessionRoutes);
+app.use('/api/attendance', apiLimiter, attendanceRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/subjects', subjectRoutes);
 // Health-check endpoint (useful for Docker / load balancers)
@@ -167,7 +170,7 @@ const shutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('unhandledRejection', (err) => {
   console.error('[Server] Unhandled rejection:', err.message);
   shutdown('unhandledRejection');

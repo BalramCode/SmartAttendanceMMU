@@ -2,6 +2,25 @@ const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const { sendSuccess, sendError } = require('../utils/response');
 
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a =
+        Math.sin(Δφ / 2) ** 2 +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/attendance/mark  [student]
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +34,31 @@ const markAttendance = async (req, res, next) => {
             isActive: true,
             expiresAt: { $gt: new Date() }
         });
+
+        const { lat, lng } = req.body;
+
+        if (!lat || !lng) {
+            return sendError(res, { status: 400, message: "Location required" });
+        }
+
+        if (!session.location) {
+            return sendError(res, { status: 500, message: "Session location not set" });
+        }
+
+        const distance = getDistance(
+            lat,
+            lng,
+            session.location.lat,
+            session.location.lng
+        );
+
+        if (distance > 100) {
+            return sendError(res, {
+                status: 403,
+                message: "You are too far from class (100m limit)"
+            });
+        }
+
 
         if (!session) {
             return sendError(res, { status: 404, message: 'Invalid QR code. Session not found.' });

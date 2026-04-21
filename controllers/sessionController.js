@@ -11,9 +11,10 @@ const SESSION_DURATION = () =>
 // ─────────────────────────────────────────────────────────────────────────────
 const createSession = async (req, res, next) => {
   try {
-    const { subject } = req.body;
+    const { subject, lat, lng } = req.body;
 
-    // Deactivate any currently active session by this teacher
+
+    // Deactivate any currently active session by this teacherFF
     await Session.updateMany(
       { teacherId: req.user._id, isActive: true },
       { isActive: false }
@@ -28,7 +29,9 @@ const createSession = async (req, res, next) => {
       qrToken,
       isActive: true,
       expiresAt,
+      location: { lat, lng } // 👈 ADD THIS
     });
+
 
     // Emit real-time event if Socket.io is available
     const io = req.app.get('io');

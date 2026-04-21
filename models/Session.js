@@ -28,8 +28,17 @@ const sessionSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: { expireAfterSeconds: 0 }, // TTL index – MongoDB auto-deletes expired docs
+      // index: { expireAfterSeconds: 0 }, // TTL index – MongoDB auto-deletes expired docs
     },
+    location: {
+      lat: {
+        type: Number,
+      },
+      lng: {
+        type: Number,
+      }
+    },
+
   },
   {
     timestamps: true,
