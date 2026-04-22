@@ -28,13 +28,25 @@ router.post("/complete-profile", protect, async (req, res) => {
   try {
     const { rollNo } = req.body;
 
+    // ❌ If rollNo missing
     if (!rollNo) {
-      return sendError(res, { message: "Roll number is required" });
+      return sendError(res, {
+        status: 400,
+        message: "Roll number is required",
+      });
     }
 
-    const user = req.user; // 🔥 secure (from JWT)
+    // ✅ Logged-in user from JWT
+    const user = await User.findById(req.user._id);
 
-    // Only students allowed
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        message: "User not found",
+      });
+    }
+
+    // ❌ Only students allowed
     if (user.role !== "student") {
       return sendError(res, {
         status: 403,
@@ -42,7 +54,7 @@ router.post("/complete-profile", protect, async (req, res) => {
       });
     }
 
-    // Prevent overwrite if already set
+    // ❌ Already has rollNo
     if (user.rollNo) {
       return sendError(res, {
         status: 400,
@@ -50,17 +62,22 @@ router.post("/complete-profile", protect, async (req, res) => {
       });
     }
 
+    // ✅ Save roll number
     user.rollNo = rollNo;
     await user.save();
 
+    // ✅ Generate new token
     const token = signToken(user._id, user.role);
 
     return sendSuccess(res, {
+      status: 200,
       message: "Profile completed successfully",
       data: { token, user },
     });
 
   } catch (error) {
+    console.error("Complete Profile Error:", error);
+
     return sendError(res, {
       status: 500,
       message: "Failed to complete profile",

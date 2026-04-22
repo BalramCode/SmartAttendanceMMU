@@ -113,43 +113,70 @@ const googleAuth = async (req, res, next) => {
 
     let user = await User.findOne({ email });
 
-    // ✅ Create user if not exists
-    if (!user) {
-      if (!role) {
-        return sendError(res, {
-          status: 400,
-          message: "Role is required",
+    // ✅ If user exists
+    if (user) {
+      // 🔥 Student without rollNo → complete profile
+      if (user.role === "student" && !user.rollNo) {
+        const jwtToken = signToken(user._id, user.role);
+
+        return sendSuccess(res, {
+          message: "Complete your profile",
+          data: {
+            token: jwtToken,
+            user,
+            needsProfileCompletion: true,
+          },
         });
       }
 
-      user = await User.create({
-        name,
-        email,
-        password: Math.random().toString(36).slice(-10),
-        role, // student or teacher
-      });
-    }
-
-    // 🔥 If student and rollNo missing → complete profile
-    if (user.role === "student" && !user.rollNo) {
       const jwtToken = signToken(user._id, user.role);
-
       return sendSuccess(res, {
-        status: 200,
-        message: "Complete your profile",
-        data: {
-          token: jwtToken,
-          user,
-          needsProfileCompletion: true,
-        },
+        message: "Google login successful",
+        data: { token: jwtToken, user },
       });
     }
 
-    // ✅ Normal login
+    // ❌ No user → must send role
+    if (!role) {
+      return sendError(res, {
+        status: 400,
+        message: "Role is required",
+      });
+    }
+
+    // 🔥 STUDENT → DO NOT CREATE
+    if (role === "student") {
+  user = await User.create({
+    name,
+    email,
+    password: Math.random().toString(36).slice(-10),
+    role: "student",
+  });
+
+  const jwtToken = signToken(user._id, user.role);
+
+  return sendSuccess(res, {
+    message: "Complete your profile",
+    data: {
+      token: jwtToken,
+      user,
+      needsProfileCompletion: true,
+    },
+  });
+}
+
+
+    // ✅ TEACHER → create directly
+    user = await User.create({
+      name,
+      email,
+      password: Math.random().toString(36).slice(-10),
+      role: "teacher",
+    });
+
     const jwtToken = signToken(user._id, user.role);
 
     return sendSuccess(res, {
-      status: 200,
       message: "Google login successful",
       data: { token: jwtToken, user },
     });
@@ -162,6 +189,7 @@ const googleAuth = async (req, res, next) => {
     });
   }
 };
+
 
 
 module.exports = { register, login, getMe, googleAuth };

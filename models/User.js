@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema(
     },
     rollNo: {
       type: String,
-      required: function () { return this.role === 'student'; },
+      required: false,
       unique: true,
       sparse: true // This allows teachers to have 'null' without crashing the unique check
     }, role: {
