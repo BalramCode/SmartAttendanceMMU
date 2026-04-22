@@ -1,8 +1,11 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { register, login, getMe ,googleAuth } = require('../controllers/authController');
+const { register, login, getMe, googleAuth } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
+const User = require('../models/User');
+const { signToken } = require('../utils/token');
+const { sendSuccess, sendError } = require('../utils/response');
 
 const router = express.Router();
 
@@ -21,32 +24,54 @@ const loginValidation = [
 ];
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-router.post("/complete-profile", async (req, res) => {
-  const { name, email, role, rollNo } = req.body;
+router.post("/complete-profile", protect, async (req, res) => {
+  try {
+    const { rollNo } = req.body;
 
-  if (!rollNo) {
-    return sendError(res, { message: "Roll number is required" });
+    if (!rollNo) {
+      return sendError(res, { message: "Roll number is required" });
+    }
+
+    const user = req.user; // 🔥 secure (from JWT)
+
+    // Only students allowed
+    if (user.role !== "student") {
+      return sendError(res, {
+        status: 403,
+        message: "Only students can complete profile",
+      });
+    }
+
+    // Prevent overwrite if already set
+    if (user.rollNo) {
+      return sendError(res, {
+        status: 400,
+        message: "Roll number already set",
+      });
+    }
+
+    user.rollNo = rollNo;
+    await user.save();
+
+    const token = signToken(user._id, user.role);
+
+    return sendSuccess(res, {
+      message: "Profile completed successfully",
+      data: { token, user },
+    });
+
+  } catch (error) {
+    return sendError(res, {
+      status: 500,
+      message: "Failed to complete profile",
+    });
   }
-
-  const user = await User.create({
-    name,
-    email,
-    password: Math.random().toString(36).slice(-10),
-    role: "student",
-    rollNo,
-  });
-
-  const token = signToken(user._id, user.role);
-
-  return sendSuccess(res, {
-    message: "Profile completed",
-    data: { token, user },
-  });
 });
 
+
 router.post('/register', registerValidation, validate, register);
-router.post('/login',    loginValidation,    validate, login);
-router.get('/me',        protect,            getMe);
+router.post('/login', loginValidation, validate, login);
+router.get('/me', protect, getMe);
 router.post("/google", googleAuth);
 
 module.exports = router;

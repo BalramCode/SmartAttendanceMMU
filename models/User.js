@@ -54,10 +54,13 @@ const userSchema = new mongoose.Schema(
 
 // ── Pre-save hook: hash password before storing ──────────────────────────────
 userSchema.pre('save', async function (next) {
+  if (!this.password) return next(); // 🔥 add this
   if (!this.isModified('password')) return next();
+
   this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
   next();
 });
+
 
 // ── Instance method: compare plain-text password with hash ───────────────────
 userSchema.methods.comparePassword = async function (candidatePassword) {

@@ -113,6 +113,7 @@ const googleAuth = async (req, res, next) => {
 
     let user = await User.findOne({ email });
 
+    // ✅ Create user if not exists
     if (!user) {
       if (!role) {
         return sendError(res, {
@@ -121,28 +122,30 @@ const googleAuth = async (req, res, next) => {
         });
       }
 
-      // 🔥 If student → DON'T create yet
-      if (role === "student") {
-        return sendSuccess(res, {
-          status: 200,
-          message: "Additional details required",
-          data: {
-            tempUser: { name, email, role },
-            needsProfileCompletion: true,
-          },
-        });
-      }
-
-      // ✅ Teacher → create directly
       user = await User.create({
         name,
         email,
         password: Math.random().toString(36).slice(-10),
-        role: "teacher",
+        role, // student or teacher
       });
     }
 
+    // 🔥 If student and rollNo missing → complete profile
+    if (user.role === "student" && !user.rollNo) {
+      const jwtToken = signToken(user._id, user.role);
 
+      return sendSuccess(res, {
+        status: 200,
+        message: "Complete your profile",
+        data: {
+          token: jwtToken,
+          user,
+          needsProfileCompletion: true,
+        },
+      });
+    }
+
+    // ✅ Normal login
     const jwtToken = signToken(user._id, user.role);
 
     return sendSuccess(res, {
@@ -159,5 +162,6 @@ const googleAuth = async (req, res, next) => {
     });
   }
 };
+
 
 module.exports = { register, login, getMe, googleAuth };
