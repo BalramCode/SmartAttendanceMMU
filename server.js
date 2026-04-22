@@ -133,12 +133,6 @@ app.get('/api/health', (_, res) =>
   res.json({ success: true, message: 'Smart Attendance API is running 🟢', timestamp: new Date() })
 );
 
-app.use(express.static(path.join(__dirname, "../smart-kalahandi/dist")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../smart-kalahandi/dist/index.html"));
-});
-
 // 404 handler for unknown routes
 app.use((req, res) =>
   sendError(res, { status: 404, message: `Route ${req.method} ${req.originalUrl} not found.` })
