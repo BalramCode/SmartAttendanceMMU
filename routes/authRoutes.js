@@ -21,6 +21,28 @@ const loginValidation = [
 ];
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+router.post("/complete-profile", async (req, res) => {
+  const { name, email, role, rollNo } = req.body;
+
+  if (!rollNo) {
+    return sendError(res, { message: "Roll number is required" });
+  }
+
+  const user = await User.create({
+    name,
+    email,
+    password: Math.random().toString(36).slice(-10),
+    role: "student",
+    rollNo,
+  });
+
+  const token = signToken(user._id, user.role);
+
+  return sendSuccess(res, {
+    message: "Profile completed",
+    data: { token, user },
+  });
+});
 
 router.post('/register', registerValidation, validate, register);
 router.post('/login',    loginValidation,    validate, login);

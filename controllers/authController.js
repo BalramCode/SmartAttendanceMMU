@@ -23,7 +23,7 @@ const register = async (req, res, next) => {
       if (!rollNo) {
         return sendError(res, { status: 422, message: 'Roll Number is required for students.' });
       }
-      
+
       // Check for duplicate Roll Number
       const existingRoll = await User.findOne({ rollNo });
       if (existingRoll) {
@@ -32,12 +32,12 @@ const register = async (req, res, next) => {
     }
 
     // 3. Create User (including rollNo)
-    const user = await User.create({ 
-      name, 
-      email: email.toLowerCase(), 
-      password, 
+    const user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password,
       role,
-      rollNo: role === 'student' ? rollNo : undefined 
+      rollNo: role === 'student' ? rollNo : undefined
     });
 
     const token = signToken(user._id, user.role);
@@ -50,7 +50,7 @@ const register = async (req, res, next) => {
   } catch (err) {
     // Catch Mongoose unique constraint errors (e.g., duplicate rollNo)
     if (err.code === 11000) {
-        return sendError(res, { status: 409, message: 'Duplicate field value entered (Email or Roll Number).' });
+      return sendError(res, { status: 409, message: 'Duplicate field value entered (Email or Roll Number).' });
     }
     next(err);
   }
@@ -114,15 +114,34 @@ const googleAuth = async (req, res, next) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // NOTE: Google login doesn't provide a Roll Number. 
-      // You may need a frontend redirect to "Complete Profile" if role is student.
+      if (!role) {
+        return sendError(res, {
+          status: 400,
+          message: "Role is required",
+        });
+      }
+
+      // 🔥 If student → DON'T create yet
+      if (role === "student") {
+        return sendSuccess(res, {
+          status: 200,
+          message: "Additional details required",
+          data: {
+            tempUser: { name, email, role },
+            needsProfileCompletion: true,
+          },
+        });
+      }
+
+      // ✅ Teacher → create directly
       user = await User.create({
         name,
         email,
-        password: Math.random().toString(36).slice(-10), 
-        role: role || "student",
+        password: Math.random().toString(36).slice(-10),
+        role: "teacher",
       });
     }
+
 
     const jwtToken = signToken(user._id, user.role);
 
