@@ -13,6 +13,7 @@ require('dotenv').config();
 
 const http = require('http');
 const express = require('express');
+const path = require("path");
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -35,17 +36,21 @@ const subjectRoutes = require('./routes/subjectRoutes');
 //  App setup
 // ─────────────────────────────────────────────────────────────────────────────
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ── Security & Parsing ────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
-
+app.use(express.static(path.join(__dirname, "dist")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
 // ── CORS ──────────────────────────────────────────────────────────────────────
 // This now pulls directly from your .env file
 const allowedOrigins = [
-  process.env.CLIENT_ORIGIN, 
+  process.env.CLIENT_ORIGIN,
   'http://localhost:8080', // Your current dev URL
   'http://localhost:3000'  // Just in case
 ].filter(Boolean); // Removes any undefined values
