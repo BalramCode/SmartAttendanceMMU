@@ -124,7 +124,7 @@ io.on('connection', (socket) => {
 //  API Routes
 // ─────────────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/sessions', apiLimiter, sessionRoutes);
+app.use('/api/session', apiLimiter, sessionRoutes);
 app.use('/api/attendance', apiLimiter, attendanceRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/subjects', subjectRoutes);

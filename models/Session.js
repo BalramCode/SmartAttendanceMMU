@@ -9,8 +9,9 @@ const sessionSchema = new mongoose.Schema(
       index: true,
     },
     subject: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       trim: true,
+      ref: 'Subject',
       maxlength: [100, 'Subject cannot exceed 100 characters'],
       default: 'General',
     },

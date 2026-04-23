@@ -35,6 +35,23 @@ const markAttendance = async (req, res, next) => {
             expiresAt: { $gt: new Date() }
         });
 
+        if (!session) {
+            return sendError(res, { status: 404, message: 'Invalid QR code. Session not found.' });
+        }
+
+        // 2. Check if session is still active
+        if (!session.isActive) {
+            return sendError(res, { status: 400, message: 'This attendance session has been closed.' });
+        }
+
+        // 3. Check token expiry
+        if (new Date() > session.expiresAt) {
+            // Auto-deactivate stale session
+            session.isActive = false;
+            await session.save();
+            return sendError(res, { status: 400, message: 'QR code has expired. Please ask the teacher to generate a new one.' });
+        }
+
         const { lat, lng } = req.body;
 
         if (!lat || !lng) {
@@ -60,22 +77,7 @@ const markAttendance = async (req, res, next) => {
         }
 
 
-        if (!session) {
-            return sendError(res, { status: 404, message: 'Invalid QR code. Session not found.' });
-        }
 
-        // 2. Check if session is still active
-        if (!session.isActive) {
-            return sendError(res, { status: 400, message: 'This attendance session has been closed.' });
-        }
-
-        // 3. Check token expiry
-        if (new Date() > session.expiresAt) {
-            // Auto-deactivate stale session
-            session.isActive = false;
-            await session.save();
-            return sendError(res, { status: 400, message: 'QR code has expired. Please ask the teacher to generate a new one.' });
-        }
 
         // 4. Prevent duplicate attendance (compound index will also catch this, but we give a nicer message)
         const alreadyMarked = await Attendance.findOne({
@@ -178,10 +180,10 @@ const getSessionAttendance = async (req, res, next) => {
             return sendError(res, { status: 404, message: 'Session not found or access denied.' });
         }
 
+        // Inside your attendance controller
         const records = await Attendance.find({ sessionId })
-            .populate('studentId', 'name email')
-            .sort({ markedAt: 1 })
-            .lean();
+            .populate('studentId', 'name rollNo') // This brings in the student's name
+            .sort({ markedAt: -1 });
 
         return sendSuccess(res, {
             message: 'Session attendance retrieved.',
