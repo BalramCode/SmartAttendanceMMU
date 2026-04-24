@@ -26,6 +26,11 @@ const sessionSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    status: {
+      type: String,
+      enum: ['active', 'completed'],
+      default: 'active'
+    }, createdAt: { type: Date, default: Date.now },
     expiresAt: {
       type: Date,
       required: true,

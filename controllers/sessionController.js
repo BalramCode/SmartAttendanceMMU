@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const { sendSuccess, sendError } = require('../utils/response');
+const mongoose = require('mongoose');
 
 const SESSION_DURATION = () =>
   parseInt(process.env.SESSION_DURATION_SECONDS || '60', 10) * 1000;
@@ -13,19 +14,30 @@ const createSession = async (req, res, next) => {
   try {
     const { subject, lat, lng } = req.body;
 
-    // 1. Check for an EXACT existing session for this subject that is still valid
+    // Create a timestamp for the very start of the current day (00:00:00)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    //FOR SPECIFIC TEACHER
+    // 1. Check if ANY session exists for this subject since the start of today
+    // const existingSession = await Session.findOne({
+    //   teacherId: req.user._id,
+    //   subject: new mongoose.Types.ObjectId(subject),
+    //   createdAt: { $gte: startOfToday } // Look for anything created today
+    // });
+
+    //FOR EVERY TEACHER CAN SEE
     const existingSession = await Session.findOne({
-      teacherId: req.user._id,
-      subject: subject, // Matches the specific subject ID
-      isActive: true,
-      expiresAt: { $gt: new Date() }
-    });
+      subject: new mongoose.Types.ObjectId(subject)
+    }).sort({ createdAt: -1 });
+
 
     if (existingSession) {
-      // IMPORTANT: Return 200. This tells the frontend "Don't reset, just resume."
+      // If found, we RETURN it. The frontend will see this and 
+      // stay on "See Attendance" instead of showing "Launch".
       return sendSuccess(res, {
         status: 200,
-        message: 'Resuming existing session with current attendance.',
+        message: 'A session for this subject was already handled today.',
         data: { session: existingSession },
       });
     }
@@ -77,26 +89,27 @@ const endSession = async (req, res, next) => {
   try {
     const { sessionId } = req.body;
 
-    const query = { teacherId: req.user._id, isActive: true };
-    if (sessionId) query._id = sessionId;
-
+    // Find the session and mark it inactive
     const session = await Session.findOneAndUpdate(
-      query,
-      { isActive: false },
+      { _id: sessionId, teacherId: req.user._id },
+      {
+        isActive: false,
+        status: 'completed'
+      },
       { new: true }
     );
 
     if (!session) {
-      return sendError(res, { status: 404, message: 'No active session found.' });
+      return sendError(res, { status: 404, message: 'Session not found.' });
     }
 
-    // Emit close event
+    // Emit event so students get kicked out of the join screen
     const io = req.app.get('io');
     if (io) {
       io.to(`session_${session._id}`).emit('session:ended', { sessionId: session._id });
     }
 
-    return sendSuccess(res, { message: 'Session ended.', data: { session } });
+    return sendSuccess(res, { message: 'Session ended successfully.', data: { session } });
   } catch (err) {
     next(err);
   }
@@ -105,24 +118,51 @@ const endSession = async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  GET /api/session/active  [teacher]
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  GET /api/session/active/:subjectId  [teacher]
+// ─────────────────────────────────────────────────────────────────────────────
 const getActiveSession = async (req, res, next) => {
   try {
-    const { subjectId } = req.params; // Get it from the URL
-    const session = await Session.findOne({
-      teacherId: req.user._id,
-      isActive: true,
-      // expiresAt: { $gt: new Date() },
-    }).populate('subject', 'name fullName').lean();
+    const { subjectId } = req.params;
 
-    if (!session) {
-      return sendSuccess(res, { message: 'No active session.', data: null });
+    //FOR SPECIFIC TEACHER
+    // const query = {
+    //   teacherId: req.user._id
+    // };
+
+    // if (subjectId) {
+    //   query.subject = new mongoose.Types.ObjectId(subjectId);
+    // }
+
+    //FOR EVERY TEACHER CAN SEE
+    const query = {};
+
+    if (subjectId) {
+      query.subject = new mongoose.Types.ObjectId(subjectId);
     }
 
-    // Attach live attendance count
+
+
+
+    const session = await Session.findOne(query)
+      .sort({ createdAt: -1 }) // Always grab the most recent one from today
+      .populate('subject', 'name fullName')
+      .lean();
+
+    // 3. If no session was found for today, return null
+    if (!session) {
+      return sendSuccess(res, {
+        message: 'No session found.',
+        data: { session: null } // Explicitly send null so frontend knows to show "Launch"
+      });
+    }
+
+    // 4. Get the real-time attendance count for the found session
     const attendanceCount = await Attendance.countDocuments({ sessionId: session._id });
 
+    // 5. Return the session. The frontend will see this and show "See Attendance"
     return sendSuccess(res, {
-      message: 'Active session found.',
+      message: 'Session retrieved successfully.',
       data: { session, attendanceCount },
     });
   } catch (err) {

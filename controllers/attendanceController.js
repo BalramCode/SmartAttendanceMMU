@@ -62,6 +62,7 @@ const markAttendance = async (req, res, next) => {
             return sendError(res, { status: 500, message: "Session location not set" });
         }
 
+        // attendanceController.js -> markAttendance function
         const distance = getDistance(
             lat,
             lng,
@@ -69,10 +70,11 @@ const markAttendance = async (req, res, next) => {
             session.location.lng
         );
 
-        if (distance > 100) {
+        // Increase tolerance to 150m for better UX in university buildings
+        if (distance > 150) {
             return sendError(res, {
                 status: 403,
-                message: "You are too far from class (100m limit)"
+                message: `Location mismatch. You are ${Math.round(distance)}m away (150m limit).`
             });
         }
 

@@ -28,7 +28,8 @@ router.post(
   endSession
 );
 
-router.get('/active',  getActiveSession);
+router.get('/active', getActiveSession);
+router.get('/active/:subjectId', getActiveSession);
 router.get('/history', getSessionHistory);
 
 module.exports = router;
