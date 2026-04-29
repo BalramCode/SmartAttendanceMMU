@@ -145,9 +145,17 @@ const getActiveSession = async (req, res, next) => {
 
 
     const session = await Session.findOne(query)
-      .sort({ createdAt: -1 }) // Always grab the most recent one from today
-      .populate('subject', 'name fullName')
-      .lean();
+  .sort({ createdAt: -1 })
+  .populate({
+    path: 'subject',
+    select: 'name fullName semester batch',
+    populate: {
+      path: 'batch',
+      select: 'name' // 👈 batch name like "2024-27"
+    }
+  })
+  .lean();
+
 
     // 3. If no session was found for today, return null
     if (!session) {
