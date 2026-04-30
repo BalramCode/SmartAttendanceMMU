@@ -1,6 +1,103 @@
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
+const User = require("../models/User");
 const { sendSuccess, sendError } = require('../utils/response');
+
+const getStudentDashboard = async (req, res) => {
+    try {
+        const studentId = req.user._id;
+
+        // 1. Get student batches
+        const student = await User.findById(studentId);
+
+        // ⚠️ TEMP FIX if no batch exists
+        // if (!student.batch && !student.batches) {
+        //     return res.json({
+        //         percentage: 0,
+        //         logs: [],
+        //         total: 0,
+        //         present: 0
+        //     });
+        // }
+const batchIds = student.batches?.length
+  ? student.batches
+  : student.batch
+    ? [student.batch]
+    : [];
+
+        // 2. Get sessions
+        const sessions = await Session.find()
+            .populate({
+                path: "subject",
+                select: "batch name"
+            });
+
+        // Filter only student's batch sessions
+        const filteredSessions = sessions.filter(session => {
+  if (!session.subject || !session.subject.batch) return false;
+
+  return batchIds.some(b =>
+    b.toString() === session.subject.batch.toString()
+  );
+});
+
+
+        const sessionIds = filteredSessions.map(s => s._id.toString());
+        const total = filteredSessions.length;
+
+        // 3. Get attendance
+        const attendance = await Attendance.find({ studentId });
+
+        // Only valid attendance
+        const validAttendance = attendance.filter(a =>
+            sessionIds.includes(a.sessionId.toString())
+        );
+
+        const present = validAttendance.filter(
+            (a) => a.status === "present"
+        ).length;
+
+        const percentage = total === 0 ? 0 : (present / total) * 100;
+        sessions.forEach(s => {
+  if (!s.subject) console.log("Missing subject:", s._id);
+  else if (!s.subject.batch) console.log("Missing batch in subject:", s.subject);
+});
+
+        console.log("Student:", student);
+        console.log("Batch IDs:", batchIds);
+        console.log("Sessions:", sessions.length);
+        console.log("Attendance:", attendance.length);
+
+        // 4. Recent logs
+        const logs = await Attendance.find({
+            studentId,
+            sessionId: { $in: sessionIds }
+        })
+            .populate({
+                path: "sessionId",
+                populate: {
+                    path: "subject",
+                    select: "name"
+                }
+            })
+            .sort({ markedAt: -1 })
+            .limit(5);
+
+
+        res.json({
+            percentage,
+            total,
+            present,
+            logs
+        });
+
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Dashboard error" });
+    }
+};
+
 
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -200,4 +297,4 @@ const getSessionAttendance = async (req, res, next) => {
     }
 };
 
-module.exports = { markAttendance, getStudentAttendance, getSessionAttendance };
+module.exports = { markAttendance, getStudentAttendance, getSessionAttendance, getStudentDashboard };

@@ -13,13 +13,13 @@ const userSchema = new mongoose.Schema(
       maxlength: [80, 'Name cannot exceed 80 characters'],
     },
     email: {
-  type: String,
-  required: [true, 'Email is required'],
-  unique: true,
-  lowercase: true, // This is key
-  trim: true,
-  match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
-},
+      type: String,
+      required: [true, 'Email is required'],
+      unique: true,
+      lowercase: true, // This is key
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
+    },
     password: {
       type: String,
       required: false,
@@ -39,6 +39,11 @@ const userSchema = new mongoose.Schema(
       },
       required: [true, 'Role is required'],
     },
+    batch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Batch"
+    }
+
   },
   {
     timestamps: true, // adds createdAt & updatedAt

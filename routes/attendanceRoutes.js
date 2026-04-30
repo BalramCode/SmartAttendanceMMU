@@ -4,7 +4,9 @@ const {
   markAttendance,
   getStudentAttendance,
   getSessionAttendance,
+  getStudentDashboard   // ✅ ADD THIS
 } = require('../controllers/attendanceController');
+
 const { protect, authorise } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -22,6 +24,13 @@ router.post(
 
 // Student: view own attendance history
 router.get('/student', protect, authorise('student'), getStudentAttendance);
+// Student: dashboard stats (avg attendance + recent logs)
+router.get(
+  '/student/dashboard',
+  protect,
+  authorise('student'),
+  getStudentDashboard
+);
 
 // Teacher: view attendance for a specific session
 router.get(
