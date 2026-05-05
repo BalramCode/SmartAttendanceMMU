@@ -3,16 +3,21 @@ const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const { sendSuccess, sendError } = require('../utils/response');
 const mongoose = require('mongoose');
-
+const Subject = require('../models/Subject');
 const SESSION_DURATION = () =>
   parseInt(process.env.SESSION_DURATION_SECONDS || '60', 10) * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/session/create  [teacher]
 // ─────────────────────────────────────────────────────────────────────────────
+
 const createSession = async (req, res, next) => {
   try {
     const { subject, lat, lng } = req.body;
+    const subjectDoc = await Subject.findById(subject);
+    if (!subjectDoc) {
+      return sendError(res, { message: "Subject not found" });
+    }
 
     // Create a timestamp for the very start of the current day (00:00:00)
     const startOfToday = new Date();
@@ -55,7 +60,8 @@ const createSession = async (req, res, next) => {
 
     const session = await Session.create({
       teacherId: req.user._id,
-      subject: subject || 'General',
+      subject: subjectDoc._id,
+      batch: subjectDoc.batch, // 🔥 THIS IS THE KEY FIX
       qrToken,
       isActive: true,
       expiresAt,
@@ -125,55 +131,43 @@ const getActiveSession = async (req, res, next) => {
   try {
     const { subjectId } = req.params;
 
-    //FOR SPECIFIC TEACHER
-    // const query = {
-    //   teacherId: req.user._id
-    // };
+    let query = {};
 
-    // if (subjectId) {
-    //   query.subject = new mongoose.Types.ObjectId(subjectId);
-    // }
-
-    //FOR EVERY TEACHER CAN SEE
-    const query = {};
-
-    if (subjectId) {
+    // ✅ FIX: only use ObjectId if valid
+    if (subjectId && mongoose.Types.ObjectId.isValid(subjectId)) {
       query.subject = new mongoose.Types.ObjectId(subjectId);
     }
 
-
-
-
     const session = await Session.findOne(query)
-  .sort({ createdAt: -1 })
-  .populate({
-    path: 'subject',
-    select: 'name fullName semester batch',
-    populate: {
-      path: 'batch',
-      select: 'name' // 👈 batch name like "2024-27"
-    }
-  })
-  .lean();
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'subject',
+        select: 'name fullName semester batch',
+        populate: {
+          path: 'batch',
+          select: 'name'
+        }
+      })
+      .lean();
 
-
-    // 3. If no session was found for today, return null
     if (!session) {
       return sendSuccess(res, {
         message: 'No session found.',
-        data: { session: null } // Explicitly send null so frontend knows to show "Launch"
+        data: { session: null }
       });
     }
 
-    // 4. Get the real-time attendance count for the found session
-    const attendanceCount = await Attendance.countDocuments({ sessionId: session._id });
+    const attendanceCount = await Attendance.countDocuments({
+      sessionId: session._id
+    });
 
-    // 5. Return the session. The frontend will see this and show "See Attendance"
     return sendSuccess(res, {
       message: 'Session retrieved successfully.',
       data: { session, attendanceCount },
     });
+
   } catch (err) {
+    console.error("getActiveSession error:", err); // 🔥 ADD THIS
     next(err);
   }
 };

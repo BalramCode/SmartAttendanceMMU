@@ -8,49 +8,85 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/auth/register
 // ─────────────────────────────────────────────────────────────────────────────
+const getBatchFromRoll = require("../utils/batchMapper");
+const Batch = require("../models/Batch");
+
 const register = async (req, res, next) => {
   try {
     const { name, email, password, role, rollNo } = req.body;
 
-    // 1. Check for existing email
-    const existingEmail = await User.findOne({ email: email.toLowerCase() });
-    if (existingEmail) {
-      return sendError(res, { status: 409, message: 'Email is already registered.' });
-    }
+    let batch = null;
 
-    // 2. Validate Student Roll Number
-    if (role === 'student') {
+    if (role === "student") {
       if (!rollNo) {
-        return sendError(res, { status: 422, message: 'Roll Number is required for students.' });
+        return sendError(res, {
+          status: 422,
+          message: "Roll Number is required for students."
+        });
       }
 
-      // Check for duplicate Roll Number
       const existingRoll = await User.findOne({ rollNo });
       if (existingRoll) {
-        return sendError(res, { status: 409, message: 'This Roll Number is already registered.' });
+        return sendError(res, {
+          status: 409,
+          message: "This Roll Number is already registered."
+        });
       }
+
+      // ✅ Single declaration
+      const batchName = getBatchFromRoll(rollNo); // "2024-2027"
+
+      if (batchName) {
+        const batchDoc = await Batch.findOne({ name: batchName });
+        if (batchDoc) {
+          batch = batchDoc._id; // ✅ link if teacher already created it
+        }
+        // batch stays null if not created yet — no error, no auto-create
+      }
+
+      // ✅ Find or create batch
+      // let batchDoc = await Batch.findOne({ name: batchName });
+      // if (!batchDoc) {
+      //   batchDoc = await Batch.create({
+      //     name: batchName,
+      //     startYear: 2024,
+      //     endYear: 2027
+      //   });
+      // }
+      // batch = batchDoc._id;
     }
 
-    // 3. Create User (including rollNo)
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return sendError(res, {
+        status: 409,
+        message: "Email is already registered."
+      });
+    }
+
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       password,
       role,
-      rollNo: role === 'student' ? rollNo : undefined
+      batch,
+      rollNo: role === "student" ? rollNo : undefined
     });
 
     const token = signToken(user._id, user.role);
 
     return sendSuccess(res, {
       status: 201,
-      message: 'Registration successful.',
+      message: "Registration successful.",
       data: { token, user },
     });
+
   } catch (err) {
-    // Catch Mongoose unique constraint errors (e.g., duplicate rollNo)
     if (err.code === 11000) {
-      return sendError(res, { status: 409, message: 'Duplicate field value entered (Email or Roll Number).' });
+      return sendError(res, {
+        status: 409,
+        message: "Duplicate field value entered."
+      });
     }
     next(err);
   }
@@ -146,24 +182,24 @@ const googleAuth = async (req, res, next) => {
 
     // 🔥 STUDENT → DO NOT CREATE
     if (role === "student") {
-  user = await User.create({
-    name,
-    email,
-    password: Math.random().toString(36).slice(-10),
-    role: "student",
-  });
+      user = await User.create({
+        name,
+        email,
+        password: Math.random().toString(36).slice(-10),
+        role: "student",
+      });
 
-  const jwtToken = signToken(user._id, user.role);
+      const jwtToken = signToken(user._id, user.role);
 
-  return sendSuccess(res, {
-    message: "Complete your profile",
-    data: {
-      token: jwtToken,
-      user,
-      needsProfileCompletion: true,
-    },
-  });
-}
+      return sendSuccess(res, {
+        message: "Complete your profile",
+        data: {
+          token: jwtToken,
+          user,
+          needsProfileCompletion: true,
+        },
+      });
+    }
 
 
     // ✅ TEACHER → create directly

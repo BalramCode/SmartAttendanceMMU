@@ -4,98 +4,53 @@ const User = require("../models/User");
 const { sendSuccess, sendError } = require('../utils/response');
 
 const getStudentDashboard = async (req, res) => {
-    try {
-        const studentId = req.user._id;
+  try {
+    const studentId = req.user._id;
 
-        // 1. Get student batches
-        const student = await User.findById(studentId);
+    // 1. Get all attendance records for this student (no batch matching needed)
+    const attendance = await Attendance.find({ studentId });
 
-        // ⚠️ TEMP FIX if no batch exists
-        // if (!student.batch && !student.batches) {
-        //     return res.json({
-        //         percentage: 0,
-        //         logs: [],
-        //         total: 0,
-        //         present: 0
-        //     });
-        // }
-const batchIds = student.batches?.length
-  ? student.batches
-  : student.batch
-    ? [student.batch]
-    : [];
+    const sessionIds = attendance.map(a => a.sessionId);
+    const present = attendance.filter(a => a.status === "present").length;
 
-        // 2. Get sessions
-        const sessions = await Session.find()
-            .populate({
-                path: "subject",
-                select: "batch name"
-            });
+    // 2. Get ALL sessions that belong to the same batch as student
+    //    by looking at sessions they actually have attendance for
+    const student = await User.findById(studentId);
 
-        // Filter only student's batch sessions
-        const filteredSessions = sessions.filter(session => {
-  if (!session.subject || !session.subject.batch) return false;
-
-  return batchIds.some(b =>
-    b.toString() === session.subject.batch.toString()
-  );
+    // 3. Find all sessions for student's batch
+    const allBatchSessions = await Session.find({ 
+      batch: student.batch 
+    });
+    const attendanceMap = {};
+attendance.forEach(a => {
+  attendanceMap[a.sessionId.toString()] = a.status;
 });
 
+    // Get recent 5 sessions from batch, show present/absent
+const recentSessions = await Session.find({ batch: student.batch })
+  .populate("subject", "name")
+  .sort({ createdAt: -1 })
+  .limit(5);
 
-        const sessionIds = filteredSessions.map(s => s._id.toString());
-        const total = filteredSessions.length;
+    const total = allBatchSessions.length; // All sessions in batch (including unattended)
+    const percentage = total === 0 ? 0 : (present / total) * 100;
 
-        // 3. Get attendance
-        const attendance = await Attendance.find({ studentId });
+    // 4. Recent logs with subject name
+   const logs = recentSessions.map(session => ({
+  _id: session._id,
+  status: attendanceMap[session._id.toString()] || "absent",
+  markedAt: session.createdAt,
+  sessionId: {
+    subject: session.subject,
+    createdAt: session.createdAt
+  }
+}));
+res.json({ percentage, total, present, logs });
 
-        // Only valid attendance
-        const validAttendance = attendance.filter(a =>
-            sessionIds.includes(a.sessionId.toString())
-        );
-
-        const present = validAttendance.filter(
-            (a) => a.status === "present"
-        ).length;
-
-        const percentage = total === 0 ? 0 : (present / total) * 100;
-        sessions.forEach(s => {
-  if (!s.subject) console.log("Missing subject:", s._id);
-  else if (!s.subject.batch) console.log("Missing batch in subject:", s.subject);
-});
-
-        console.log("Student:", student);
-        console.log("Batch IDs:", batchIds);
-        console.log("Sessions:", sessions.length);
-        console.log("Attendance:", attendance.length);
-
-        // 4. Recent logs
-        const logs = await Attendance.find({
-            studentId,
-            sessionId: { $in: sessionIds }
-        })
-            .populate({
-                path: "sessionId",
-                populate: {
-                    path: "subject",
-                    select: "name"
-                }
-            })
-            .sort({ markedAt: -1 })
-            .limit(5);
-
-
-        res.json({
-            percentage,
-            total,
-            present,
-            logs
-        });
-
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Dashboard error" });
-    }
+  } catch (error) {
+    console.error("Dashboard Error:", error);
+    res.status(500).json({ message: "Dashboard error" });
+  }
 };
 
 

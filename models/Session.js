@@ -15,6 +15,10 @@ const sessionSchema = new mongoose.Schema(
       maxlength: [100, 'Subject cannot exceed 100 characters'],
       default: 'General',
     },
+    batch: {
+  type: String,
+  required: true
+},
     qrToken: {
       type: String,
       required: true,

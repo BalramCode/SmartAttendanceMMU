@@ -39,10 +39,15 @@ const userSchema = new mongoose.Schema(
       },
       required: [true, 'Role is required'],
     },
-    batch: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Batch"
-    }
+    // batch: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "Batch"
+    // }
+batch: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Batch",
+  default: null,
+}
 
   },
   {
