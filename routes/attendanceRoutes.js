@@ -4,9 +4,10 @@ const {
   markAttendance,
   getStudentAttendance,
   getSessionAttendance,
-  getStudentDashboard   // ✅ ADD THIS
+  getStudentDashboard,   // ✅ ADD THIS
+  getTeacherDashboard,
 } = require('../controllers/attendanceController');
-
+// const { getTeacherDashboard } = require('../controllers/attendanceController');
 const { protect, authorise } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -30,6 +31,13 @@ router.get(
   protect,
   authorise('student'),
   getStudentDashboard
+);
+
+router.get(
+  '/teacher/dashboard-stats', 
+  protect, 
+  authorise('teacher'), 
+  getTeacherDashboard
 );
 
 // Teacher: view attendance for a specific session

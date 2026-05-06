@@ -6,7 +6,12 @@ const Subject = require('../models/Subject');
 router.get('/:batchId/:semId', async (req, res) => {
   try {
     const { batchId, semId } = req.params;
-    const subjects = await Subject.find({ batch: batchId, semester: semId });
+
+    const subjects = await Subject
+      .find({ batch: batchId, semester: semId })
+      .populate("batch", "name") // 👈 fetch only batch name
+      .sort({ createdAt: -1 }); // 👈 latest first
+
     res.json(subjects);
   } catch (err) {
     res.status(500).json({ message: "Error fetching subjects" });

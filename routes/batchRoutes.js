@@ -15,6 +15,16 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
+// GET batch by ID
+router.get('/:id', protect, async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    res.json(batch);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // POST - only teacher can create batch
 router.post('/', protect, authorise('teacher'), async (req, res) => {
   try {

@@ -4,55 +4,130 @@ const User = require("../models/User");
 const { sendSuccess, sendError } = require('../utils/response');
 
 const getStudentDashboard = async (req, res) => {
+    try {
+        const studentId = req.user._id;
+
+        // 1. Get all attendance records for this student (no batch matching needed)
+        const attendance = await Attendance.find({ studentId });
+
+        const sessionIds = attendance.map(a => a.sessionId);
+        const present = attendance.filter(a => a.status === "present").length;
+
+        // 2. Get ALL sessions that belong to the same batch as student
+        //    by looking at sessions they actually have attendance for
+        const student = await User.findById(studentId);
+
+        // 3. Find all sessions for student's batch
+        const allBatchSessions = await Session.find({
+            batch: student.batch
+        });
+        const attendanceMap = {};
+        attendance.forEach(a => {
+            attendanceMap[a.sessionId.toString()] = a.status;
+        });
+
+        // Get recent 5 sessions from batch, show present/absent
+        const recentSessions = await Session.find({ batch: student.batch })
+            .populate("subject", "name")
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        const total = allBatchSessions.length; // All sessions in batch (including unattended)
+        const percentage = total === 0 ? 0 : (present / total) * 100;
+
+        // 4. Recent logs with subject name
+        const logs = recentSessions.map(session => ({
+            _id: session._id,
+            status: attendanceMap[session._id.toString()] || "absent",
+            markedAt: session.createdAt,
+            sessionId: {
+                subject: session.subject,
+                createdAt: session.createdAt
+            }
+        }));
+        res.json({ percentage, total, present, logs });
+
+    } catch (error) {
+        console.error("Dashboard Error:", error);
+        res.status(500).json({ message: "Dashboard error" });
+    }
+};
+
+const getTeacherDashboard = async (req, res) => {
   try {
-    const studentId = req.user._id;
+    // 1. Stats: Total Sessions (System Wide)
+    const totalSessions = await Session.countDocuments();
 
-    // 1. Get all attendance records for this student (no batch matching needed)
-    const attendance = await Attendance.find({ studentId });
+    // 2. Stats: Total Students (Count all users with role 'student')
+    const totalStudents = await User.countDocuments({ role: 'student' });
 
-    const sessionIds = attendance.map(a => a.sessionId);
-    const present = attendance.filter(a => a.status === "present").length;
+    // 3. Stats: Avg Attendance (Total Marks / Total Possible Marks)
+    const totalAttendanceRecords = await Attendance.countDocuments();
+    
+    // Logic: If there are 10 sessions and 100 students, total possible marks = 1000
+    const totalPossibleMarks = totalSessions * totalStudents;
+    const avgAttendance = totalPossibleMarks > 0 
+      ? Math.round((totalAttendanceRecords / totalPossibleMarks) * 100) 
+      : 0;
 
-    // 2. Get ALL sessions that belong to the same batch as student
-    //    by looking at sessions they actually have attendance for
-    const student = await User.findById(studentId);
+    // 4. Recent Sessions (Last 6 sessions created in the system)
+    const recentSessionsRaw = await Session.find()
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .populate('teacherId', 'name'); // Show which teacher took the session
 
-    // 3. Find all sessions for student's batch
-    const allBatchSessions = await Session.find({ 
-      batch: student.batch 
-    });
-    const attendanceMap = {};
-attendance.forEach(a => {
-  attendanceMap[a.sessionId.toString()] = a.status;
-});
-
-    // Get recent 5 sessions from batch, show present/absent
-const recentSessions = await Session.find({ batch: student.batch })
-  .populate("subject", "name")
-  .sort({ createdAt: -1 })
-  .limit(5);
-
-    const total = allBatchSessions.length; // All sessions in batch (including unattended)
-    const percentage = total === 0 ? 0 : (present / total) * 100;
-
-    // 4. Recent logs with subject name
-   const logs = recentSessions.map(session => ({
-  _id: session._id,
-  status: attendanceMap[session._id.toString()] || "absent",
-  markedAt: session.createdAt,
-  sessionId: {
-    subject: session.subject,
-    createdAt: session.createdAt
-  }
+   const recentSessions = await Promise.all(recentSessionsRaw.map(async (s) => {
+  const count = await Attendance.countDocuments({ sessionId: s._id });
+  
+  return {
+    id: s._id,
+    // If 'batch' is an ID, we show 'Session' or populate it. 
+    // For now, let's use the subject name as the primary label.
+    batchName: s.batch.length > 20 ? "Class Session" : s.batch, 
+    subjectName: s.teacherId?.name ? `Prof. ${s.teacherId.name}` : "General Session",
+    attendanceCount: count,
+    // Add totalStudents here so the frontend can calculate rate correctly
+    totalPossible: totalStudents || 1, 
+    createdAt: s.createdAt
+  };
 }));
-res.json({ percentage, total, present, logs });
 
-  } catch (error) {
-    console.error("Dashboard Error:", error);
-    res.status(500).json({ message: "Dashboard error" });
+    // 5. Recent Activity (Live Feed - Last 10 people who scanned anywhere)
+    const recentActivityRaw = await Attendance.find()
+      .sort({ markedAt: -1 })
+      .limit(10)
+      .populate('studentId', 'name');
+
+    const recentActivity = recentActivityRaw.map(act => ({
+      studentName: act.studentId?.name || 'Unknown Student',
+      timeAgo: formatTimeAgo(act.markedAt)
+    }));
+
+    res.status(200).json({
+      stats: {
+        totalSessions,
+        enrolledStudents: totalStudents,
+        avgAttendance: avgAttendance > 100 ? 100 : avgAttendance
+      },
+      recentSessions,
+      recentActivity
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching global stats', error: err.message });
   }
 };
 
+// Helper function for the "Live Feed" timestamps
+const formatTimeAgo = (date) => {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return date.toLocaleDateString();
+};
 
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -252,4 +327,4 @@ const getSessionAttendance = async (req, res, next) => {
     }
 };
 
-module.exports = { markAttendance, getStudentAttendance, getSessionAttendance, getStudentDashboard };
+module.exports = { markAttendance, getStudentAttendance, getSessionAttendance, getStudentDashboard, getTeacherDashboard };
