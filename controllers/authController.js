@@ -2,8 +2,30 @@ const User = require('../models/User');
 const { signToken } = require('../utils/token');
 const { sendSuccess, sendError } = require('../utils/response');
 const { OAuth2Client } = require("google-auth-library");
+const crypto = require('crypto');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const validateTeacherRegistrationKey = (teacherKey = '') => {
+  const expectedKey = process.env.TEACHER_REGISTRATION_KEY;
+
+  if (!expectedKey) {
+    return { ok: false, status: 500, message: 'Teacher registration is not configured.' };
+  }
+
+  const provided = Buffer.from(String(teacherKey));
+  const expected = Buffer.from(expectedKey);
+
+  if (provided.length !== expected.length) {
+    return { ok: false, status: 403, message: 'Invalid teacher registration key.' };
+  }
+
+  if (!crypto.timingSafeEqual(provided, expected)) {
+    return { ok: false, status: 403, message: 'Invalid teacher registration key.' };
+  }
+
+  return { ok: true };
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/auth/register
@@ -13,9 +35,19 @@ const Batch = require("../models/Batch");
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, role, rollNo } = req.body;
+    const { name, email, password, role, rollNo, teacherKey } = req.body;
 
     let batch = null;
+
+    if (role === "teacher") {
+      const keyCheck = validateTeacherRegistrationKey(teacherKey);
+      if (!keyCheck.ok) {
+        return sendError(res, {
+          status: keyCheck.status,
+          message: keyCheck.message,
+        });
+      }
+    }
 
     if (role === "student") {
       if (!rollNo) {
@@ -137,7 +169,7 @@ const getMe = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const googleAuth = async (req, res, next) => {
   try {
-    const { token, role } = req.body;
+    const { token, role, teacherKey } = req.body;
 
     const ticket = await client.verifyIdToken({
       idToken: token,
@@ -180,6 +212,13 @@ const googleAuth = async (req, res, next) => {
       });
     }
 
+    if (!["student", "teacher"].includes(role)) {
+      return sendError(res, {
+        status: 400,
+        message: 'Role must be "student" or "teacher"',
+      });
+    }
+
     // 🔥 STUDENT → DO NOT CREATE
     if (role === "student") {
       user = await User.create({
@@ -203,6 +242,16 @@ const googleAuth = async (req, res, next) => {
 
 
     // ✅ TEACHER → create directly
+    if (role === "teacher") {
+      const keyCheck = validateTeacherRegistrationKey(teacherKey);
+      if (!keyCheck.ok) {
+        return sendError(res, {
+          status: keyCheck.status,
+          message: keyCheck.message,
+        });
+      }
+    }
+
     user = await User.create({
       name,
       email,

@@ -28,7 +28,7 @@ const getStudentDashboard = async (req, res) => {
 
         // Get recent 5 sessions from batch, show present/absent
         const recentSessions = await Session.find({ batch: student.batch })
-            .populate("subject", "name")
+            .populate("subject", "name fullName")
             .sort({ createdAt: -1 })
             .limit(5);
 

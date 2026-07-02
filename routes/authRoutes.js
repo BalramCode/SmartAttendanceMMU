@@ -16,6 +16,7 @@ const registerValidation = [
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password').isLength({ min: 4 }).withMessage('Password must be at least 8 characters'),
   body('role').isIn(['student', 'teacher']).withMessage('Role must be "student" or "teacher"'),
+  body('teacherKey').optional().isString().trim().isLength({ max: 200 }).withMessage('Teacher registration key is invalid'),
 ];
 
 const loginValidation = [
