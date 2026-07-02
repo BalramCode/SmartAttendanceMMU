@@ -3,6 +3,8 @@ const Attendance = require('../models/Attendance');
 const User = require("../models/User");
 const { sendSuccess, sendError } = require('../utils/response');
 
+const DEVICE_ALREADY_USED_MESSAGE = 'This device has already been used to mark attendance for this session.';
+
 const getStudentDashboard = async (req, res) => {
     try {
         const studentId = req.user._id;
@@ -153,7 +155,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
 // ─────────────────────────────────────────────────────────────────────────────
 const markAttendance = async (req, res, next) => {
     try {
-        const { qrToken } = req.body;
+        const { qrToken, installationId } = req.body;
 
         // 1. Find the session by token
         const session = await Session.findOne({
@@ -205,9 +207,6 @@ const markAttendance = async (req, res, next) => {
             });
         }
 
-
-
-
         // 4. Prevent duplicate attendance (compound index will also catch this, but we give a nicer message)
         const alreadyMarked = await Attendance.findOne({
             studentId: req.user._id,
@@ -217,10 +216,19 @@ const markAttendance = async (req, res, next) => {
             return sendError(res, { status: 409, message: 'You have already marked attendance for this session.' });
         }
 
+        const deviceAlreadyUsed = await Attendance.findOne({
+            sessionId: session._id,
+            installationId,
+        });
+        if (deviceAlreadyUsed) {
+            return sendError(res, { status: 409, message: DEVICE_ALREADY_USED_MESSAGE });
+        }
+
         // 5. Save attendance record
         const attendance = await Attendance.create({
             studentId: req.user._id,
             sessionId: session._id,
+            installationId,
             status: 'present',
         });
 
@@ -252,6 +260,10 @@ const markAttendance = async (req, res, next) => {
     } catch (err) {
         // Handle Mongoose duplicate key for the compound index
         if (err.code === 11000) {
+            if (err.keyPattern?.installationId) {
+                return sendError(res, { status: 409, message: DEVICE_ALREADY_USED_MESSAGE });
+            }
+
             return sendError(res, { status: 409, message: 'You have already marked attendance for this session.' });
         }
         next(err);

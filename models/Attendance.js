@@ -14,6 +14,12 @@ const attendanceSchema = new mongoose.Schema(
       required: [true, 'Session reference is required'],
       index: true,
     },
+    installationId: {
+      type: String,
+      required: [true, 'Installation ID is required'],
+      trim: true,
+      index: true,
+    },
     status: {
       type: String,
       enum: ['present', 'absent'],
@@ -32,5 +38,6 @@ const attendanceSchema = new mongoose.Schema(
 
 // ── Compound unique index: one attendance record per student per session ──────
 attendanceSchema.index({ studentId: 1, sessionId: 1 }, { unique: true });
+attendanceSchema.index({ sessionId: 1, installationId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

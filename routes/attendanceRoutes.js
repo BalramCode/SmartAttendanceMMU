@@ -18,7 +18,13 @@ router.post(
   '/mark',
   protect,
   authorise('student'),
-  [body('qrToken').notEmpty().withMessage('QR token is required')],
+  [
+    body('qrToken').notEmpty().withMessage('QR token is required'),
+    body('installationId')
+      .trim()
+      .isUUID()
+      .withMessage('Valid installation ID is required'),
+  ],
   validate,
   markAttendance
 );
