@@ -1,32 +1,47 @@
 const express = require('express');
 const router = express.Router();
 const Subject = require('../models/Subject');
+const { protect, authorise } = require('../middleware/auth');
 
-// GET subjects for a specific batch and semester
+router.use(protect, authorise('teacher'));
+
+// GET subjects for a specific batch and semester.
 router.get('/:batchId/:semId', async (req, res) => {
   try {
     const { batchId, semId } = req.params;
 
-    const subjects = await Subject
-      .find({ batch: batchId, semester: semId })
-      .populate("batch", "name") // 👈 fetch only batch name
-      .sort({ createdAt: -1 }); // 👈 latest first
+    const subjects = await Subject.find({ batch: batchId, semester: semId })
+      .populate('batch', 'name')
+      .populate('teacher', 'name email')
+      .sort({ createdAt: -1 });
 
     res.json(subjects);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching subjects" });
+    res.status(500).json({ message: 'Error fetching subjects' });
   }
 });
 
-// POST a new subject
+// POST a new subject.
 router.post('/', async (req, res) => {
   try {
     const { name, fullName, batch, semester } = req.body;
-    const newSubject = new Subject({ name, fullName, batch, semester });
-    const savedSubject = await newSubject.save();
-    res.status(201).json(savedSubject);
+
+    const savedSubject = await Subject.create({
+      name,
+      fullName,
+      batch,
+      semester,
+      teacher: req.user._id,
+    });
+
+    const populatedSubject = await savedSubject.populate([
+      { path: 'batch', select: 'name' },
+      { path: 'teacher', select: 'name email' },
+    ]);
+
+    res.status(201).json(populatedSubject);
   } catch (err) {
-    res.status(400).json({ message: "Error creating subject" });
+    res.status(400).json({ message: 'Error creating subject' });
   }
 });
 

@@ -7,6 +7,18 @@ const Subject = require('../models/Subject');
 const SESSION_DURATION = () =>
   parseInt(process.env.SESSION_DURATION_SECONDS || '60', 10) * 1000;
 
+const populateSessionTeacherData = (query) =>
+  query
+    .populate('teacherId', 'name email')
+    .populate({
+      path: 'subject',
+      select: 'name fullName semester batch teacher',
+      populate: [
+        { path: 'batch', select: 'name' },
+        { path: 'teacher', select: 'name email' },
+      ],
+    });
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/session/create  [teacher]
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,9 +44,9 @@ const createSession = async (req, res, next) => {
     // });
 
     //FOR EVERY TEACHER CAN SEE
-    const existingSession = await Session.findOne({
+    const existingSession = await populateSessionTeacherData(Session.findOne({
       subject: new mongoose.Types.ObjectId(subject)
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 })).lean();
 
 
     if (existingSession) {
@@ -68,6 +80,10 @@ const createSession = async (req, res, next) => {
       location: { lat, lng }
     });
 
+    const populatedSession = await populateSessionTeacherData(
+      Session.findById(session._id)
+    ).lean();
+
     // 4. Socket.io Emit
     const io = req.app.get('io');
     if (io) {
@@ -75,14 +91,14 @@ const createSession = async (req, res, next) => {
         sessionId: session._id,
         qrToken,
         expiresAt,
-        subject: session.subject,
+        subject: populatedSession?.subject || session.subject,
       });
     }
 
     return sendSuccess(res, {
       status: 201,
       message: 'New attendance session created.',
-      data: { session },
+      data: { session: populatedSession || session },
     });
   } catch (err) {
     next(err);
@@ -138,17 +154,9 @@ const getActiveSession = async (req, res, next) => {
       query.subject = new mongoose.Types.ObjectId(subjectId);
     }
 
-    const session = await Session.findOne(query)
-      .sort({ createdAt: -1 })
-      .populate({
-        path: 'subject',
-        select: 'name fullName semester batch',
-        populate: {
-          path: 'batch',
-          select: 'name'
-        }
-      })
-      .lean();
+    const session = await populateSessionTeacherData(
+      Session.findOne(query).sort({ createdAt: -1 })
+    ).lean();
 
     if (!session) {
       return sendSuccess(res, {
@@ -182,8 +190,7 @@ const getSessionHistory = async (req, res, next) => {
 
     // sessionController.js
     const [sessions, total] = await Promise.all([
-      Session.find({ teacherId: req.user._id })
-        .populate('subject', 'name fullName') // Populates the subject name from your Subject model
+      populateSessionTeacherData(Session.find({ teacherId: req.user._id }))
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
