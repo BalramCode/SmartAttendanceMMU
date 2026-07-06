@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Batch = require('../models/Batch');
 const User = require('../models/User');
-const { protect, authorise } = require('../middleware/auth');
+const { protect, authorise, requireOnboardingComplete } = require('../middleware/auth');
 const getBatchFromRoll = require('../utils/batchMapper');
 
 // GET all batches
-router.get('/', protect, async (req, res) => {
+router.get('/', protect, requireOnboardingComplete, async (req, res) => {
   try {
     const batches = await Batch.find();
     res.json(batches);
@@ -16,7 +16,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // GET batch by ID
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, requireOnboardingComplete, async (req, res) => {
   try {
     const batch = await Batch.findById(req.params.id);
     res.json(batch);
@@ -26,7 +26,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // POST - only teacher can create batch
-router.post('/', protect, authorise('teacher'), async (req, res) => {
+router.post('/', protect, authorise('teacher'), requireOnboardingComplete, async (req, res) => {
   try {
     const { startYear, endYear } = req.body;
     const name = `${startYear}-${endYear}`; // "2024-2027" ✅ consistent format

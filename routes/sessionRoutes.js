@@ -6,13 +6,13 @@ const {
   getActiveSession,
   getSessionHistory,
 } = require('../controllers/sessionController');
-const { protect, authorise } = require('../middleware/auth');
+const { protect, authorise, requireOnboardingComplete } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
 
 // All session routes require authentication + teacher role
-router.use(protect, authorise('teacher'));
+router.use(protect, authorise('teacher'), requireOnboardingComplete);
 
 router.post(
   '/create',

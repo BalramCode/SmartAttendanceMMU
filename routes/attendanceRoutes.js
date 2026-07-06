@@ -8,7 +8,7 @@ const {
   getTeacherDashboard,
 } = require('../controllers/attendanceController');
 // const { getTeacherDashboard } = require('../controllers/attendanceController');
-const { protect, authorise } = require('../middleware/auth');
+const { protect, authorise, requireOnboardingComplete } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
@@ -18,6 +18,7 @@ router.post(
   '/mark',
   protect,
   authorise('student'),
+  requireOnboardingComplete,
   [
     body('qrToken').notEmpty().withMessage('QR token is required'),
     body('installationId')
@@ -30,12 +31,13 @@ router.post(
 );
 
 // Student: view own attendance history
-router.get('/student', protect, authorise('student'), getStudentAttendance);
+router.get('/student', protect, authorise('student'), requireOnboardingComplete, getStudentAttendance);
 // Student: dashboard stats (avg attendance + recent logs)
 router.get(
   '/student/dashboard',
   protect,
   authorise('student'),
+  requireOnboardingComplete,
   getStudentDashboard
 );
 
@@ -43,6 +45,7 @@ router.get(
   '/teacher/dashboard-stats', 
   protect, 
   authorise('teacher'), 
+  requireOnboardingComplete,
   getTeacherDashboard
 );
 
@@ -51,6 +54,7 @@ router.get(
   '/session/:id',
   protect,
   authorise('teacher'),
+  requireOnboardingComplete,
   [param('id').isMongoId().withMessage('Invalid session ID')],
   validate,
   getSessionAttendance

@@ -49,4 +49,59 @@ const authorise = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { protect, authorise };
+const hasRollNumber = (user) =>
+  typeof user.rollNo === 'string' && user.rollNo.trim().length > 0;
+
+const isStudentOnboardingComplete = (user) =>
+  user.role === 'student' && hasRollNumber(user) && user.onboardingCompleted !== false;
+
+const isTeacherOnboardingComplete = (user) =>
+  user.role === 'teacher' &&
+  user.teacherRegistrationKeyVerified !== false &&
+  user.onboardingCompleted !== false;
+
+const getOnboardingStatus = (user) => ({
+  studentOnboardingComplete:
+    user.role === 'student' ? isStudentOnboardingComplete(user) : undefined,
+  teacherOnboardingComplete:
+    user.role === 'teacher' ? isTeacherOnboardingComplete(user) : undefined,
+  needsProfileCompletion:
+    user.role === 'student' ? !isStudentOnboardingComplete(user) : false,
+  needsTeacherRegistrationKey:
+    user.role === 'teacher' ? !isTeacherOnboardingComplete(user) : false,
+});
+
+const requireOnboardingComplete = (req, res, next) => {
+  if (req.user.role === 'student' && !isStudentOnboardingComplete(req.user)) {
+    return sendError(res, {
+      status: 403,
+      message: 'Complete your roll number onboarding before continuing.',
+      errors: {
+        code: 'ONBOARDING_REQUIRED',
+        onboardingRoute: '/complete-profile',
+      },
+    });
+  }
+
+  if (req.user.role === 'teacher' && !isTeacherOnboardingComplete(req.user)) {
+    return sendError(res, {
+      status: 403,
+      message: 'Verify your teacher registration key before continuing.',
+      errors: {
+        code: 'ONBOARDING_REQUIRED',
+        onboardingRoute: '/complete-teacher-profile',
+      },
+    });
+  }
+
+  next();
+};
+
+module.exports = {
+  protect,
+  authorise,
+  requireOnboardingComplete,
+  getOnboardingStatus,
+  isStudentOnboardingComplete,
+  isTeacherOnboardingComplete,
+};

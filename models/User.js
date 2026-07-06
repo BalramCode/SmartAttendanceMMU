@@ -31,7 +31,16 @@ const userSchema = new mongoose.Schema(
       required: false,
       unique: true,
       sparse: true // This allows teachers to have 'null' without crashing the unique check
-    }, role: {
+    },
+    onboardingCompleted: {
+      type: Boolean,
+      required: false,
+    },
+    teacherRegistrationKeyVerified: {
+      type: Boolean,
+      required: false,
+    },
+    role: {
       type: String,
       enum: {
         values: ['student', 'teacher'],

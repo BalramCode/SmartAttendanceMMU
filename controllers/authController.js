@@ -3,6 +3,7 @@ const { signToken } = require('../utils/token');
 const { sendSuccess, sendError } = require('../utils/response');
 const { OAuth2Client } = require("google-auth-library");
 const crypto = require('crypto');
+const { getOnboardingStatus } = require('../middleware/auth');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -26,6 +27,12 @@ const validateTeacherRegistrationKey = (teacherKey = '') => {
 
   return { ok: true };
 };
+
+const buildAuthData = (token, user) => ({
+  token,
+  user,
+  ...getOnboardingStatus(user),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  POST /api/auth/register
@@ -102,7 +109,9 @@ const register = async (req, res, next) => {
       password,
       role,
       batch,
-      rollNo: role === "student" ? rollNo : undefined
+      rollNo: role === "student" ? rollNo : undefined,
+      onboardingCompleted: true,
+      teacherRegistrationKeyVerified: role === "teacher" ? true : undefined,
     });
 
     const token = signToken(user._id, user.role);
@@ -110,7 +119,7 @@ const register = async (req, res, next) => {
     return sendSuccess(res, {
       status: 201,
       message: "Registration successful.",
-      data: { token, user },
+      data: buildAuthData(token, user),
     });
 
   } catch (err) {
@@ -147,7 +156,7 @@ const login = async (req, res, next) => {
     return sendSuccess(res, {
       status: 200,
       message: 'Login successful.',
-      data: { token, user: safeUser },
+      data: buildAuthData(token, safeUser),
     });
   } catch (err) {
     next(err);
@@ -160,7 +169,7 @@ const login = async (req, res, next) => {
 const getMe = async (req, res) => {
   return sendSuccess(res, {
     message: 'Authenticated user.',
-    data: { user: req.user },
+    data: { user: req.user, ...getOnboardingStatus(req.user) },
   });
 };
 
@@ -169,7 +178,7 @@ const getMe = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const googleAuth = async (req, res, next) => {
   try {
-    const { token, role, teacherKey } = req.body;
+    const { token, role } = req.body;
 
     const ticket = await client.verifyIdToken({
       idToken: token,
@@ -178,8 +187,29 @@ const googleAuth = async (req, res, next) => {
 
     const payload = ticket.getPayload();
     const { email, name } = payload;
+    const normalizedEmail = email.toLowerCase();
 
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      if (role && user.role !== role) {
+        return sendError(res, {
+          status: 409,
+          message: `This Google account is already registered as a ${user.role}.`,
+        });
+      }
+
+      const jwtToken = signToken(user._id, user.role);
+      const status = getOnboardingStatus(user);
+
+      return sendSuccess(res, {
+        message:
+          status.needsProfileCompletion || status.needsTeacherRegistrationKey
+            ? "Complete your onboarding"
+            : "Google login successful",
+        data: buildAuthData(jwtToken, user),
+      });
+    }
 
     // ✅ If user exists
     if (user) {
@@ -223,47 +253,36 @@ const googleAuth = async (req, res, next) => {
     if (role === "student") {
       user = await User.create({
         name,
-        email,
+        email: normalizedEmail,
         password: Math.random().toString(36).slice(-10),
         role: "student",
+        onboardingCompleted: false,
       });
 
       const jwtToken = signToken(user._id, user.role);
 
       return sendSuccess(res, {
         message: "Complete your profile",
-        data: {
-          token: jwtToken,
-          user,
-          needsProfileCompletion: true,
-        },
+        data: buildAuthData(jwtToken, user),
       });
     }
 
 
     // ✅ TEACHER → create directly
-    if (role === "teacher") {
-      const keyCheck = validateTeacherRegistrationKey(teacherKey);
-      if (!keyCheck.ok) {
-        return sendError(res, {
-          status: keyCheck.status,
-          message: keyCheck.message,
-        });
-      }
-    }
-
     user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password: Math.random().toString(36).slice(-10),
       role: "teacher",
+      onboardingCompleted: false,
+      teacherRegistrationKeyVerified: false,
     });
 
     const jwtToken = signToken(user._id, user.role);
 
     return sendSuccess(res, {
-      message: "Google login successful",
-      data: { token: jwtToken, user },
+      message: "Verify your teacher registration key",
+      data: buildAuthData(jwtToken, user),
     });
 
   } catch (error) {
@@ -277,4 +296,11 @@ const googleAuth = async (req, res, next) => {
 
 
 
-module.exports = { register, login, getMe, googleAuth };
+module.exports = {
+  register,
+  login,
+  getMe,
+  googleAuth,
+  validateTeacherRegistrationKey,
+  buildAuthData,
+};

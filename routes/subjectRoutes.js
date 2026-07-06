@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Subject = require('../models/Subject');
-const { protect, authorise } = require('../middleware/auth');
+const { protect, authorise, requireOnboardingComplete } = require('../middleware/auth');
 
-router.use(protect, authorise('teacher'));
+router.use(protect, authorise('teacher'), requireOnboardingComplete);
 
 // GET subjects for a specific batch and semester.
 router.get('/:batchId/:semId', async (req, res) => {
