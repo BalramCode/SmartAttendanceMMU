@@ -33,6 +33,7 @@ async function sendAttendanceReportEmail({
     attachments: [
       {
         filename: `attendance_${safeTitle}_${safeDate}.csv`,
+        contentType: 'text/csv',
         content: csvBuffer,
       },
     ],

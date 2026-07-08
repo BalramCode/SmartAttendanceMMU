@@ -20,11 +20,17 @@ function generateAttendanceCSV(session, attendanceRecords) {
     markedAt: formatDateTime(record.markedAt || record.createdAt),
   }));
 
-  const parser = new Parser({
-    fields: ['studentName', 'rollNo', 'status', 'markedAt'],
-  });
+  let csv;
+  try {
+    const parser = new Parser({
+      fields: ['studentName', 'rollNo', 'status', 'markedAt'],
+    });
+    csv = parser.parse(rows);
+  } catch (err) {
+    console.error('[AttendanceCSV] json2csv parse failed:', err);
+    throw err;
+  }
 
-  const csv = parser.parse(rows);
   const createdAt = formatDateTime(session.createdAt);
   const expiresAt = formatDateTime(session.expiresAt);
   const teacherName = session.teacherId?.name || session.teacherName || 'Teacher';
@@ -36,7 +42,8 @@ function generateAttendanceCSV(session, attendanceRecords) {
     `Time: ${createdAt}${expiresAt ? ` - ${expiresAt}` : ''}\n` +
     `Teacher: ${teacherName}\n\n`;
 
-  return Buffer.from(header + csv, 'utf-8');
+  const csvString = header + csv;
+  return Buffer.from(csvString, 'utf-8');
 }
 
 module.exports = { generateAttendanceCSV, getSubjectLabel };

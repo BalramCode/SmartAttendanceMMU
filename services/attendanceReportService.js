@@ -1,5 +1,6 @@
 const Attendance = require('../models/Attendance');
 const Session = require('../models/Session');
+const mongoose = require('mongoose');
 require('../models/User');
 require('../models/Subject');
 require('../models/Batch');
@@ -21,10 +22,42 @@ const getReportData = async (sessionId) => {
     throw new Error('Session not found');
   }
 
-  const attendanceRecords = await Attendance.find({ sessionId: session._id })
-    .populate('studentId', 'name rollNo')
-    .sort({ markedAt: 1 })
-    .lean();
+  const sessionObjectId = new mongoose.Types.ObjectId(session._id);
+  const attendanceRecords = await Attendance.aggregate([
+    { $match: { sessionId: sessionObjectId } },
+    { $sort: { markedAt: -1, createdAt: -1, _id: -1 } },
+    {
+      $group: {
+        _id: '$studentId',
+        record: { $first: '$$ROOT' },
+      },
+    },
+    { $replaceRoot: { newRoot: '$record' } },
+    { $sort: { markedAt: 1, createdAt: 1, _id: 1 } },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'studentId',
+        foreignField: '_id',
+        as: 'student',
+      },
+    },
+    { $unwind: { path: '$student', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        sessionId: 1,
+        status: 1,
+        markedAt: 1,
+        createdAt: 1,
+        studentId: {
+          _id: '$studentId',
+          name: '$student.name',
+          rollNo: '$student.rollNo',
+        },
+      },
+    },
+  ]);
 
   return { session, attendanceRecords };
 };
@@ -83,6 +116,7 @@ const resendSessionReport = async (sessionId) => {
 };
 
 module.exports = {
+  getReportData,
   handleSessionCompleted,
   resendSessionReport,
 };

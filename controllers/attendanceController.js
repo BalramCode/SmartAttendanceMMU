@@ -31,7 +31,14 @@ const getStudentDashboard = async (req, res) => {
 
         // Get recent 5 sessions from batch, show present/absent
         const recentSessions = await Session.find({ batch: student.batch })
-            .populate("subject", "name fullName")
+            .populate({
+                path: "subject",
+                select: "name fullName teacher",
+                populate: {
+                    path: "teacher",
+                    select: "name email"
+                }
+            })
             .sort({ createdAt: -1 })
             .limit(5);
 
@@ -45,6 +52,7 @@ const getStudentDashboard = async (req, res) => {
             markedAt: session.createdAt,
             sessionId: {
                 subject: session.subject,
+                teacherId: session.teacherId,
                 createdAt: session.createdAt
             }
         }));
@@ -57,79 +65,79 @@ const getStudentDashboard = async (req, res) => {
 };
 
 const getTeacherDashboard = async (req, res) => {
-  try {
-    // 1. Stats: Total Sessions (System Wide)
-    const totalSessions = await Session.countDocuments();
+    try {
+        // 1. Stats: Total Sessions (System Wide)
+        const totalSessions = await Session.countDocuments();
 
-    // 2. Stats: Total Students (Count all users with role 'student')
-    const totalStudents = await User.countDocuments({ role: 'student' });
+        // 2. Stats: Total Students (Count all users with role 'student')
+        const totalStudents = await User.countDocuments({ role: 'student' });
 
-    // 3. Stats: Avg Attendance (Total Marks / Total Possible Marks)
-    const totalAttendanceRecords = await Attendance.countDocuments();
-    
-    // Logic: If there are 10 sessions and 100 students, total possible marks = 1000
-    const totalPossibleMarks = totalSessions * totalStudents;
-    const avgAttendance = totalPossibleMarks > 0 
-      ? Math.round((totalAttendanceRecords / totalPossibleMarks) * 100) 
-      : 0;
+        // 3. Stats: Avg Attendance (Total Marks / Total Possible Marks)
+        const totalAttendanceRecords = await Attendance.countDocuments();
 
-    // 4. Recent Sessions (Last 6 sessions created in the system)
-    const recentSessionsRaw = await Session.find()
-      .sort({ createdAt: -1 })
-      .limit(6)
-      .populate('teacherId', 'name'); // Show which teacher took the session
+        // Logic: If there are 10 sessions and 100 students, total possible marks = 1000
+        const totalPossibleMarks = totalSessions * totalStudents;
+        const avgAttendance = totalPossibleMarks > 0
+            ? Math.round((totalAttendanceRecords / totalPossibleMarks) * 100)
+            : 0;
 
-   const recentSessions = await Promise.all(recentSessionsRaw.map(async (s) => {
-  const count = await Attendance.countDocuments({ sessionId: s._id });
-  
-  return {
-    id: s._id,
-    // If 'batch' is an ID, we show 'Session' or populate it. 
-    // For now, let's use the subject name as the primary label.
-    batchName: s.batch.length > 20 ? "Class Session" : s.batch, 
-    subjectName: s.teacherId?.name ? `Prof. ${s.teacherId.name}` : "General Session",
-    attendanceCount: count,
-    // Add totalStudents here so the frontend can calculate rate correctly
-    totalPossible: totalStudents || 1, 
-    createdAt: s.createdAt
-  };
-}));
+        // 4. Recent Sessions (Last 6 sessions created in the system)
+        const recentSessionsRaw = await Session.find()
+            .sort({ createdAt: -1 })
+            .limit(6)
+            .populate('teacherId', 'name'); // Show which teacher took the session
 
-    // 5. Recent Activity (Live Feed - Last 10 people who scanned anywhere)
-    const recentActivityRaw = await Attendance.find()
-      .sort({ markedAt: -1 })
-      .limit(10)
-      .populate('studentId', 'name');
+        const recentSessions = await Promise.all(recentSessionsRaw.map(async (s) => {
+            const count = await Attendance.countDocuments({ sessionId: s._id });
 
-    const recentActivity = recentActivityRaw.map(act => ({
-      studentName: act.studentId?.name || 'Unknown Student',
-      timeAgo: formatTimeAgo(act.markedAt)
-    }));
+            return {
+                id: s._id,
+                // If 'batch' is an ID, we show 'Session' or populate it. 
+                // For now, let's use the subject name as the primary label.
+                batchName: s.batch.length > 20 ? "Class Session" : s.batch,
+                subjectName: s.teacherId?.name ? `Prof. ${s.teacherId.name}` : "General Session",
+                attendanceCount: count,
+                // Add totalStudents here so the frontend can calculate rate correctly
+                totalPossible: totalStudents || 1,
+                createdAt: s.createdAt
+            };
+        }));
 
-    res.status(200).json({
-      stats: {
-        totalSessions,
-        enrolledStudents: totalStudents,
-        avgAttendance: avgAttendance > 100 ? 100 : avgAttendance
-      },
-      recentSessions,
-      recentActivity
-    });
+        // 5. Recent Activity (Live Feed - Last 10 people who scanned anywhere)
+        const recentActivityRaw = await Attendance.find()
+            .sort({ markedAt: -1 })
+            .limit(10)
+            .populate('studentId', 'name');
 
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching global stats', error: err.message });
-  }
+        const recentActivity = recentActivityRaw.map(act => ({
+            studentName: act.studentId?.name || 'Unknown Student',
+            timeAgo: formatTimeAgo(act.markedAt)
+        }));
+
+        res.status(200).json({
+            stats: {
+                totalSessions,
+                enrolledStudents: totalStudents,
+                avgAttendance: avgAttendance > 100 ? 100 : avgAttendance
+            },
+            recentSessions,
+            recentActivity
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: 'Error fetching global stats', error: err.message });
+    }
 };
 
 // Helper function for the "Live Feed" timestamps
 const formatTimeAgo = (date) => {
-  const seconds = Math.floor((new Date() - date) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return date.toLocaleDateString();
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return date.toLocaleDateString();
 };
 
 function getDistance(lat1, lon1, lat2, lon2) {
