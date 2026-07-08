@@ -23,6 +23,7 @@ const { Server: SocketServer } = require('socket.io');
 const { connectDB, disconnectDB } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { sendError } = require('./utils/response');
+const { startSessionExpiryMonitor } = require('./services/sessionExpiryService');
 
 // ── Route imports ─────────────────────────────────────────────────────────────
 const authRoutes = require('./routes/authRoutes');
@@ -148,6 +149,7 @@ const PORT = process.env.PORT || 5000;
 
 const start = async () => {
   await connectDB();
+  startSessionExpiryMonitor();
   server.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════╗

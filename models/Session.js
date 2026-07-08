@@ -13,7 +13,7 @@ const sessionSchema = new mongoose.Schema(
       trim: true,
       ref: 'Subject',
       maxlength: [100, 'Subject cannot exceed 100 characters'],
-      default: 'General',
+      default: null,
     },
     batch: {
   type: String,
@@ -34,7 +34,12 @@ const sessionSchema = new mongoose.Schema(
       type: String,
       enum: ['active', 'completed'],
       default: 'active'
-    }, createdAt: { type: Date, default: Date.now },
+    },
+    emailSent: {
+      type: Boolean,
+      default: false,
+    },
+    createdAt: { type: Date, default: Date.now },
     expiresAt: {
       type: Date,
       required: true,

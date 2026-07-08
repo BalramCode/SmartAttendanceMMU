@@ -4,6 +4,10 @@ const Attendance = require('../models/Attendance');
 const { sendSuccess, sendError } = require('../utils/response');
 const mongoose = require('mongoose');
 const Subject = require('../models/Subject');
+const {
+  handleSessionCompleted,
+  resendSessionReport,
+} = require('../services/attendanceReportService');
 const SESSION_DURATION = () =>
   parseInt(process.env.SESSION_DURATION_SECONDS || '60', 10) * 1000;
 
@@ -131,8 +135,30 @@ const endSession = async (req, res, next) => {
       io.to(`session_${session._id}`).emit('session:ended', { sessionId: session._id });
     }
 
+    handleSessionCompleted(session._id);
+
     return sendSuccess(res, { message: 'Session ended successfully.', data: { session } });
   } catch (err) {
+    next(err);
+  }
+};
+
+const resendAttendanceReport = async (req, res, next) => {
+  try {
+    const session = await Session.findOne({ _id: req.params.id, teacherId: req.user._id });
+    if (!session) {
+      return sendError(res, { status: 404, message: 'Session not found or access denied.' });
+    }
+
+    await resendSessionReport(session._id);
+
+    return sendSuccess(res, { message: 'Report resent successfully.' });
+  } catch (err) {
+    if (err.statusCode) {
+      return sendError(res, { status: err.statusCode, message: err.message });
+    }
+
+    console.error(`[AttendanceEmail] Resend failed for session ${req.params.id}:`, err.message);
     next(err);
   }
 };
@@ -216,4 +242,10 @@ const getSessionHistory = async (req, res, next) => {
   }
 };
 
-module.exports = { createSession, endSession, getActiveSession, getSessionHistory };
+module.exports = {
+  createSession,
+  endSession,
+  resendAttendanceReport,
+  getActiveSession,
+  getSessionHistory,
+};

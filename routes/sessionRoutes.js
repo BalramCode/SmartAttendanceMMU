@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const {
   createSession,
   endSession,
+  resendAttendanceReport,
   getActiveSession,
   getSessionHistory,
 } = require('../controllers/sessionController');
@@ -31,5 +32,6 @@ router.post(
 router.get('/active', getActiveSession);
 router.get('/active/:subjectId', getActiveSession);
 router.get('/history', getSessionHistory);
+router.post('/:id/resend-report', resendAttendanceReport);
 
 module.exports = router;

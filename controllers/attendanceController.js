@@ -2,6 +2,7 @@ const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const User = require("../models/User");
 const { sendSuccess, sendError } = require('../utils/response');
+const { handleSessionCompleted } = require('../services/attendanceReportService');
 
 const DEVICE_ALREADY_USED_MESSAGE = 'This device has already been used to mark attendance for this session.';
 
@@ -160,8 +161,7 @@ const markAttendance = async (req, res, next) => {
         // 1. Find the session by token
         const session = await Session.findOne({
             qrToken: qrToken,
-            isActive: true,
-            expiresAt: { $gt: new Date() }
+            isActive: true
         });
 
         if (!session) {
@@ -175,9 +175,14 @@ const markAttendance = async (req, res, next) => {
 
         // 3. Check token expiry
         if (new Date() > session.expiresAt) {
+            console.log(
+                `[ExpiryEmailTest] Lazy QR expiry handling started: sessionId=${session._id}, status=${session.status}, emailSent=${session.emailSent}, expiresAt=${session.expiresAt?.toISOString()}`
+            );
             // Auto-deactivate stale session
             session.isActive = false;
+            session.status = 'completed';
             await session.save();
+            handleSessionCompleted(session._id);
             return sendError(res, { status: 400, message: 'QR code has expired. Please ask the teacher to generate a new one.' });
         }
 
