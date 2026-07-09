@@ -167,9 +167,10 @@ const login = async (req, res, next) => {
 //  GET /api/auth/me (protected)
 // ─────────────────────────────────────────────────────────────────────────────
 const getMe = async (req, res) => {
+  const user = await User.findById(req.user._id).populate('batch');
   return sendSuccess(res, {
     message: 'Authenticated user.',
-    data: { user: req.user, ...getOnboardingStatus(req.user) },
+    data: { user, ...getOnboardingStatus(user) },
   });
 };
 
