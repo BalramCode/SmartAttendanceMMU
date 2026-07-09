@@ -11,19 +11,29 @@ const getStudentDashboard = async (req, res) => {
         const studentId = req.user._id;
 
         // 1. Get all attendance records for this student (no batch matching needed)
-        const attendance = await Attendance.find({ studentId });
+        // const attendance = await Attendance.find({ studentId });
+        const student = await User.findById(studentId);
 
-        const sessionIds = attendance.map(a => a.sessionId);
+        const allBatchSessions = await Session.find({ batch: student.batch });
+
+        const sessionIds = allBatchSessions.map(s => s._id);
+
+        const attendance = await Attendance.find({
+            studentId,
+            sessionId: { $in: sessionIds }
+        });
+
+        // const sessionIds = attendance.map(a => a.sessionId);
         const present = attendance.filter(a => a.status === "present").length;
 
         // 2. Get ALL sessions that belong to the same batch as student
         //    by looking at sessions they actually have attendance for
-        const student = await User.findById(studentId);
+        // const student = await User.findById(studentId);
 
         // 3. Find all sessions for student's batch
-        const allBatchSessions = await Session.find({
-            batch: student.batch
-        });
+        // const allBatchSessions = await Session.find({
+        //     batch: student.batch
+        // });
         const attendanceMap = {};
         attendance.forEach(a => {
             attendanceMap[a.sessionId.toString()] = a.status;
@@ -212,11 +222,11 @@ const markAttendance = async (req, res, next) => {
             session.location.lng
         );
 
-        // Increase tolerance to 150m for better UX in university buildings
-        if (distance > 150) {
+        // Increase tolerance to 50m for better UX in university buildings
+        if (distance > 50) {
             return sendError(res, {
                 status: 403,
-                message: `Location mismatch. You are ${Math.round(distance)}m away (150m limit).`
+                message: `Location mismatch. You are ${Math.round(distance)}m away (50m limit).`
             });
         }
 
