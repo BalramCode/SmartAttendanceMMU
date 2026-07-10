@@ -204,7 +204,7 @@ const markAttendance = async (req, res, next) => {
             return sendError(res, { status: 400, message: 'QR code has expired. Please ask the teacher to generate a new one.' });
         }
 
-        const { lat, lng } = req.body;
+        const { lat, lng, accuracy, device } = req.body;
 
         const studentLat = parseFloat(lat);
         const studentLng = parseFloat(lng);
@@ -226,7 +226,7 @@ const markAttendance = async (req, res, next) => {
         );
 
         // Security logging
-        console.log(`[Security/Location Validation] Teacher: [${session.location.lat}, ${session.location.lng}], Student: [${studentLat}, ${studentLng}], Distance: ${distance}m, Max Allowed: 50m, Session: ${session._id}, Result: ${distance <= 50 ? 'Passed' : 'Rejected'}`);
+        console.log(`[Security/Location Validation] Teacher: [${session.location.lat}, ${session.location.lng}], Student: [${studentLat}, ${studentLng}], Accuracy: ${accuracy || 'Unknown'}m, Device: ${device || 'Unknown'}, Distance: ${distance}m, Max Allowed: 50m, Session: ${session._id}, Result: ${distance <= 50 ? 'Passed' : 'Rejected'}`);
 
         // Increase tolerance to 50m for better UX in university buildings
         if (distance > 50) {

@@ -29,7 +29,7 @@ const populateSessionTeacherData = (query) =>
 
 const createSession = async (req, res, next) => {
   try {
-    const { subject, lat, lng } = req.body;
+    const { subject, lat, lng, accuracy, device } = req.body;
 
     // Strict numerical validation for teacher location
     const latNum = parseFloat(lat);
@@ -95,6 +95,9 @@ const createSession = async (req, res, next) => {
     const populatedSession = await populateSessionTeacherData(
       Session.findById(session._id)
     ).lean();
+
+    console.log(`[Location Tracking] Session Creation - Lat: ${latNum}, Lng: ${lngNum}, Accuracy: ${accuracy || 'Unknown'}m, Device: ${device || 'Unknown'}`);
+
     // 4. Socket.io Emit
     const io = req.app.get('io');
     if (io) {
