@@ -206,21 +206,27 @@ const markAttendance = async (req, res, next) => {
 
         const { lat, lng } = req.body;
 
-        if (!lat || !lng) {
-            return sendError(res, { status: 400, message: "Location required" });
+        const studentLat = parseFloat(lat);
+        const studentLng = parseFloat(lng);
+        
+        if (isNaN(studentLat) || isNaN(studentLng) || typeof lat === 'object' || typeof lng === 'object') {
+            return sendError(res, { status: 400, message: "Invalid location data provided." });
         }
 
-        if (!session.location) {
-            return sendError(res, { status: 500, message: "Session location not set" });
+        if (!session.location || typeof session.location.lat !== 'number' || typeof session.location.lng !== 'number') {
+            return sendError(res, { status: 500, message: "Session location is missing or invalid. Cannot verify distance." });
         }
 
         // attendanceController.js -> markAttendance function
         const distance = getDistance(
-            lat,
-            lng,
+            studentLat,
+            studentLng,
             session.location.lat,
             session.location.lng
         );
+
+        // Security logging
+        console.log(`[Security/Location Validation] Teacher: [${session.location.lat}, ${session.location.lng}], Student: [${studentLat}, ${studentLng}], Distance: ${distance}m, Max Allowed: 50m, Session: ${session._id}, Result: ${distance <= 50 ? 'Passed' : 'Rejected'}`);
 
         // Increase tolerance to 50m for better UX in university buildings
         if (distance > 50) {

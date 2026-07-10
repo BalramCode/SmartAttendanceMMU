@@ -30,6 +30,14 @@ const populateSessionTeacherData = (query) =>
 const createSession = async (req, res, next) => {
   try {
     const { subject, lat, lng } = req.body;
+
+    // Strict numerical validation for teacher location
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (isNaN(latNum) || isNaN(lngNum) || typeof lat === 'object' || typeof lng === 'object') {
+      return sendError(res, { status: 400, message: "Valid location coordinates (lat, lng) are required to create a session." });
+    }
+
     const subjectDoc = await Subject.findById(subject);
     if (!subjectDoc) {
       return sendError(res, { message: "Subject not found" });
@@ -81,13 +89,12 @@ const createSession = async (req, res, next) => {
       qrToken,
       isActive: true,
       expiresAt,
-      location: { lat, lng }
+      location: { lat: latNum, lng: lngNum }
     });
 
     const populatedSession = await populateSessionTeacherData(
       Session.findById(session._id)
     ).lean();
-
     // 4. Socket.io Emit
     const io = req.app.get('io');
     if (io) {
