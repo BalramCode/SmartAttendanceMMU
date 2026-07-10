@@ -1,49 +1,59 @@
-const { Parser } = require('json2csv');
-
-const formatDateTime = (value) => {
+const formatDate = (value) => {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+};
+
+const formatTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString();
 };
 
 const getSubjectLabel = (subject) => {
   if (!subject) return 'General';
   if (typeof subject === 'string') return subject;
-  return subject.fullName || subject.name || 'General';
+  return subject.name || subject.fullName || 'General';
 };
 
-function generateAttendanceCSV(session, attendanceRecords) {
-  const rows = attendanceRecords.map((record) => ({
-    studentName: record.studentId?.name || 'Unknown Student',
-    rollNo: record.studentId?.rollNo || '',
-    status: record.status || 'present',
-    markedAt: formatDateTime(record.markedAt || record.createdAt),
-  }));
+const getTopicLabel = (subject) => {
+  if (!subject) return 'N/A';
+  if (typeof subject === 'string') return 'N/A';
+  return subject.fullName || 'N/A';
+};
 
-  let csv;
-  try {
-    const parser = new Parser({
-      fields: ['studentName', 'rollNo', 'status', 'markedAt'],
+function generateEmailBody(session, attendanceRecords) {
+  const subjectName = getSubjectLabel(session.subject);
+  const topicName = getTopicLabel(session.subject);
+  const batch = session.subject?.batch?.name || session.batch || 'N/A';
+  const semester = session.subject?.semester || 'N/A';
+
+  const sessionDate = formatDate(session.createdAt || Date.now());
+  const sessionTime = formatTime(session.createdAt || Date.now());
+
+  let body = `Attendance Report\n\n`;
+  body += `Subject: ${subjectName}\n`;
+  body += `Topic: ${topicName}\n`;
+  body += `Batch: ${batch}\n`;
+  body += `Semester: ${semester}\n`;
+  body += `Date: ${sessionDate}\n`;
+  body += `Session Time: ${sessionTime}\n\n`;
+  body += `Total Students Present: ${attendanceRecords.length}\n\n`;
+
+  if (attendanceRecords.length === 0) {
+    body += `No students were marked present for this session.`;
+  } else {
+    attendanceRecords.forEach((record, index) => {
+      const studentName = record.studentId?.name || 'Unknown Student';
+      const rollNo = record.studentId?.rollNo || 'N/A';
+      body += `${index + 1}. ${studentName}\n   Roll No.: ${rollNo}`;
+      if (index < attendanceRecords.length - 1) {
+        body += `\n\n`;
+      }
     });
-    csv = parser.parse(rows);
-  } catch (err) {
-    console.error('[AttendanceCSV] json2csv parse failed:', err);
-    throw err;
   }
 
-  const createdAt = formatDateTime(session.createdAt);
-  const expiresAt = formatDateTime(session.expiresAt);
-  const teacherName = session.teacherId?.name || session.teacherName || 'Teacher';
-
-  const header =
-    `Session: ${getSubjectLabel(session.subject)}\n` +
-    `Batch: ${session.subject?.batch?.name || session.batch || ''}\n` +
-    `Date: ${createdAt}\n` +
-    `Time: ${createdAt}${expiresAt ? ` - ${expiresAt}` : ''}\n` +
-    `Teacher: ${teacherName}\n\n`;
-
-  const csvString = header + csv;
-  return Buffer.from(csvString, 'utf-8');
+  return body;
 }
 
-module.exports = { generateAttendanceCSV, getSubjectLabel };
+module.exports = { generateEmailBody, getSubjectLabel };

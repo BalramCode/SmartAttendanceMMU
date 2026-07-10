@@ -5,7 +5,7 @@ require('../models/User');
 require('../models/Subject');
 require('../models/Batch');
 const { sendAttendanceReportEmail } = require('./emailService');
-const { generateAttendanceCSV, getSubjectLabel } = require('./reportGenerator');
+const { generateEmailBody, getSubjectLabel } = require('./reportGenerator');
 
 const populateReportSession = (query) =>
   query
@@ -72,8 +72,7 @@ const sendSessionReport = async (session, attendanceRecords) => {
   }
 
   const sessionTitle = getSubjectLabel(session.subject);
-  const dateStr = new Date(session.createdAt || Date.now()).toLocaleDateString();
-  const csvBuffer = generateAttendanceCSV(session, attendanceRecords);
+  const emailBody = generateEmailBody(session, attendanceRecords);
 
   console.log(
     `[ExpiryEmailTest] About to call sendAttendanceReportEmail: sessionId=${session._id}, to=${teacherEmail}, attendanceCount=${attendanceRecords.length}`
@@ -81,9 +80,7 @@ const sendSessionReport = async (session, attendanceRecords) => {
   await sendAttendanceReportEmail({
     to: teacherEmail,
     sessionTitle,
-    dateStr,
-    csvBuffer,
-    attendanceCount: attendanceRecords.length,
+    emailBody,
   });
 };
 
