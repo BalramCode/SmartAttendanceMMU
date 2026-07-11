@@ -51,21 +51,23 @@ app.use(express.urlencoded({ extended: false }));
 // This now pulls directly from your .env file
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
-  'http://localhost:8080', // Your current dev URL
-  'http://localhost:3000'  // Just in case
-].filter(Boolean); // Removes any undefined values
+  'http://localhost:8080',
+  'http://localhost:3000',
+  'https://localhost'
+].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      // allow server-to-server / Postman (no origin)
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      if (!origin || allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+
       cb(new Error(`CORS: origin ${origin} is not allowed`));
     },
     credentials: true,
   })
 );
-
 // ── Logging ───────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
