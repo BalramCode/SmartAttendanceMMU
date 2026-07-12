@@ -91,11 +91,21 @@ const handleSessionCompleted = async (sessionId) => {
       return;
     }
 
-    await sendSessionReport(session, attendanceRecords);
-    session.emailSent = true;
+    try {
+      await sendSessionReport(session, attendanceRecords);
+      session.emailSent = true;
+      session.emailStatus = 'delivered';
+      console.log(`[AttendanceEmail] Email marked as sent for session ${sessionId}`);
+    } catch (emailErr) {
+      console.error(`[AttendanceEmail] Failed to send email for session ${sessionId}:`, emailErr.message);
+      session.emailSent = false;
+      session.emailStatus = 'failed';
+    }
+
+    // Save session state regardless of email success/failure
     await session.save();
   } catch (err) {
-    console.error(`[AttendanceEmail] Failed for session ${sessionId}:`, err.message);
+    console.error(`[AttendanceEmail] Critical error processing session ${sessionId}:`, err.message);
   }
 };
 
@@ -107,9 +117,19 @@ const resendSessionReport = async (sessionId) => {
     throw err;
   }
 
-  await sendSessionReport(session, attendanceRecords);
-  session.emailSent = true;
-  await session.save();
+  try {
+    await sendSessionReport(session, attendanceRecords);
+    session.emailSent = true;
+    session.emailStatus = 'delivered';
+    await session.save();
+    console.log(`[AttendanceEmail] Resend successful for session ${sessionId}`);
+  } catch (emailErr) {
+    session.emailSent = false;
+    session.emailStatus = 'failed';
+    await session.save();
+    console.error(`[AttendanceEmail] Resend failed for session ${sessionId}:`, emailErr.message);
+    throw emailErr; // rethrow so the controller can return an error response
+  }
 };
 
 module.exports = {

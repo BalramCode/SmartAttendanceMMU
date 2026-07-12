@@ -39,6 +39,11 @@ const sessionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    emailStatus: {
+      type: String,
+      enum: ['pending', 'delivered', 'failed'],
+      default: 'pending'
+    },
     createdAt: { type: Date, default: Date.now },
     expiresAt: {
       type: Date,

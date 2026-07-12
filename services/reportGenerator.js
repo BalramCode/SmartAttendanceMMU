@@ -31,7 +31,10 @@ function generateEmailBody(session, attendanceRecords) {
   const sessionDate = formatDate(session.createdAt || Date.now());
   const sessionTime = formatTime(session.createdAt || Date.now());
 
+  const teacherName = session.teacherId?.name || 'Unknown Teacher';
+
   let body = `Attendance Report\n\n`;
+  body += `Teacher: ${teacherName}\n`;
   body += `Subject: ${subjectName}\n`;
   body += `Topic: ${topicName}\n`;
   body += `Batch: ${batch}\n`;
