@@ -10,11 +10,29 @@ const getStudentDashboard = async (req, res) => {
     try {
         const studentId = req.user._id;
 
-        // 1. Get all attendance records for this student (no batch matching needed)
-        // const attendance = await Attendance.find({ studentId });
         const student = await User.findById(studentId);
+        
+        let batchQuery = student.batch;
 
-        const allBatchSessions = await Session.find({ batch: student.batch });
+        // If batch is missing, try to auto-detect from rollNo
+        if (!batchQuery && student.rollNo) {
+            const getBatchFromRoll = require('../utils/batchMapper');
+            const Batch = require('../models/Batch');
+            const batchName = getBatchFromRoll(student.rollNo);
+            if (batchName) {
+                const batchDoc = await Batch.findOne({ name: batchName });
+                if (batchDoc) {
+                    batchQuery = batchDoc._id;
+                    student.batch = batchQuery;
+                    await student.save();
+                }
+            }
+        }
+
+        console.log(`[Student Dashboard Trace] authenticated student ID: ${studentId}`);
+        console.log(`[Student Dashboard Trace] MongoDB query Session.find({ batch: ${batchQuery} })`);
+
+        const allBatchSessions = await Session.find({ batch: batchQuery });
 
         const sessionIds = allBatchSessions.map(s => s._id);
 
@@ -23,24 +41,16 @@ const getStudentDashboard = async (req, res) => {
             sessionId: { $in: sessionIds }
         });
 
-        // const sessionIds = attendance.map(a => a.sessionId);
+        console.log(`[Student Dashboard Trace] attendance documents found: ${attendance.length}`);
+
         const present = attendance.filter(a => a.status === "present").length;
-
-        // 2. Get ALL sessions that belong to the same batch as student
-        //    by looking at sessions they actually have attendance for
-        // const student = await User.findById(studentId);
-
-        // 3. Find all sessions for student's batch
-        // const allBatchSessions = await Session.find({
-        //     batch: student.batch
-        // });
+        
         const attendanceMap = {};
         attendance.forEach(a => {
             attendanceMap[a.sessionId.toString()] = a.status;
         });
 
-        // Get recent 5 sessions from batch, show present/absent
-        const recentSessions = await Session.find({ batch: student.batch })
+        const recentSessions = await Session.find({ batch: batchQuery })
             .populate({
                 path: "subject",
                 select: "name fullName teacher",
@@ -55,7 +65,9 @@ const getStudentDashboard = async (req, res) => {
         const total = allBatchSessions.length; // All sessions in batch (including unattended)
         const percentage = total === 0 ? 0 : (present / total) * 100;
 
-        // 4. Recent logs with subject name
+        console.log(`[Student Dashboard Trace] calculated attendance percentage: ${percentage}%`);
+        console.log(`[Student Dashboard Trace] total sessions: ${total}`);
+
         const logs = recentSessions.map(session => ({
             _id: session._id,
             status: attendanceMap[session._id.toString()] || "absent",
@@ -66,7 +78,11 @@ const getStudentDashboard = async (req, res) => {
                 createdAt: session.createdAt
             }
         }));
-        res.json({ percentage, total, present, logs });
+        
+        const responseJSON = { percentage, total, present, logs };
+        console.log(`[Student Dashboard Trace] response JSON:`, JSON.stringify(responseJSON));
+        
+        res.json(responseJSON);
 
     } catch (error) {
         console.error("Dashboard Error:", error);
