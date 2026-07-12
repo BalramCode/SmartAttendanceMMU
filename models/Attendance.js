@@ -25,6 +25,38 @@ const attendanceSchema = new mongoose.Schema(
       enum: ['present', 'absent'],
       default: 'present',
     },
+    isMockLocation: {
+      type: Boolean,
+      default: false
+    },
+    isRooted: {
+      type: Boolean,
+      default: false
+    },
+    rootBeerError: {
+      type: Boolean,
+      default: false
+    },
+    developerOptionsEnabled: {
+      type: Boolean,
+      default: false
+    },
+    gpsAccuracy: {
+      type: Number,
+      default: null
+    },
+    locationTimestamp: {
+      type: Date,
+      default: null
+    },
+    location: {
+      lat: { type: Number },
+      lng: { type: Number }
+    },
+    velocityRisk: {
+      type: Boolean,
+      default: false
+    },
     markedAt: {
       type: Date,
       default: Date.now,

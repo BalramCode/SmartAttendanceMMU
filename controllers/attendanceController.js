@@ -220,13 +220,66 @@ const markAttendance = async (req, res, next) => {
             return sendError(res, { status: 400, message: 'QR code has expired. Please ask the teacher to generate a new one.' });
         }
 
-        const { lat, lng, accuracy, device } = req.body;
+        const { lat, lng, accuracy, device, isMockLocation, isRooted, rootBeerError, developerOptionsEnabled, gpsAccuracy, locationTimestamp } = req.body;
 
         const studentLat = parseFloat(lat);
         const studentLng = parseFloat(lng);
         
         if (isNaN(studentLat) || isNaN(studentLng) || typeof lat === 'object' || typeof lng === 'object') {
             return sendError(res, { status: 400, message: "Invalid location data provided." });
+        }
+
+        // 1. Anti-Fake-GPS: Hard Rejects
+        if (isMockLocation === true || String(isMockLocation) === 'true') {
+            return sendError(res, { status: 403, message: 'Fake location detected. Please disable mock location and try again.' });
+        }
+        if (isRooted === true || String(isRooted) === 'true') {
+            return sendError(res, { status: 403, message: 'Rooted or tampered device detected. Attendance cannot be recorded.' });
+        }
+
+        // 2. Anti-Fake-GPS: Stale location check
+        if (locationTimestamp) {
+            const locTime = new Date(locationTimestamp).getTime();
+            const serverTime = Date.now();
+            const MAX_LOCATION_AGE_MS = 30000;
+            if (serverTime - locTime > MAX_LOCATION_AGE_MS) {
+                return sendError(res, { status: 400, message: 'Location data is stale. Please try again.' });
+            }
+        }
+
+        // 3. Anti-Fake-GPS: Suspicious Accuracy
+        const finalAccuracy = gpsAccuracy || accuracy;
+        let accuracyRisk = false;
+        if (finalAccuracy !== undefined && finalAccuracy !== null) {
+            const accNum = parseFloat(finalAccuracy);
+            if (accNum === 0.0) {
+                return sendError(res, { status: 400, message: 'Suspicious GPS accuracy (0.0m). Location rejected.' });
+            }
+            if (accNum < 1.5) {
+                accuracyRisk = true;
+                console.log(`[Security/Location Validation] Suspicious accuracy detected: ${accNum}m for user ${req.user._id}`);
+            }
+        }
+
+        // 4. Anti-Fake-GPS: Velocity / Teleportation check
+        let velocityRisk = false;
+        const lastAttendance = await Attendance.findOne({ studentId: req.user._id })
+            .sort({ markedAt: -1 })
+            .lean();
+        
+        if (lastAttendance && lastAttendance.location && lastAttendance.location.lat) {
+            const prevLat = lastAttendance.location.lat;
+            const prevLng = lastAttendance.location.lng;
+            const distMoved = getDistance(prevLat, prevLng, studentLat, studentLng);
+            const timeDiffSec = (Date.now() - new Date(lastAttendance.markedAt).getTime()) / 1000;
+            
+            // Avoid division by zero
+            if (timeDiffSec > 0) {
+                const speedKmph = (distMoved / 1000) / (timeDiffSec / 3600);
+                if (speedKmph > 150) {
+                    return sendError(res, { status: 403, message: 'Teleportation or impossible velocity detected. Attendance rejected.' });
+                }
+            }
         }
 
         if (!session.location || typeof session.location.lat !== 'number' || typeof session.location.lng !== 'number') {
@@ -275,6 +328,14 @@ const markAttendance = async (req, res, next) => {
             sessionId: session._id,
             installationId,
             status: 'present',
+            isMockLocation: !!isMockLocation,
+            isRooted: !!isRooted,
+            rootBeerError: !!rootBeerError,
+            developerOptionsEnabled: !!developerOptionsEnabled,
+            gpsAccuracy: finalAccuracy,
+            locationTimestamp,
+            location: { lat: studentLat, lng: studentLng },
+            velocityRisk: velocityRisk || accuracyRisk, // Tracking risk
         });
 
         // 6. Emit real-time update to teacher dashboard
