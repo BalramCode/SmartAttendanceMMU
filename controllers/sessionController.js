@@ -252,10 +252,46 @@ const getSessionHistory = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  DELETE /api/session/:id  [teacher]
+// ─────────────────────────────────────────────────────────────────────────────
+const deleteSession = async (req, res, next) => {
+  const sessionTrans = await mongoose.startSession();
+  sessionTrans.startTransaction();
+
+  try {
+    const { id } = req.params;
+
+    const session = await Session.findOne({ _id: id, teacherId: req.user._id }).session(sessionTrans);
+    if (!session) {
+      await sessionTrans.abortTransaction();
+      sessionTrans.endSession();
+      return sendError(res, { status: 404, message: 'Session not found or access denied.' });
+    }
+
+    // 1. Delete all Attendance records referencing this Session ID
+    await Attendance.deleteMany({ sessionId: session._id }).session(sessionTrans);
+
+    // 2. Delete the Session
+    await Session.findByIdAndDelete(session._id).session(sessionTrans);
+
+    await sessionTrans.commitTransaction();
+    sessionTrans.endSession();
+
+    return sendSuccess(res, { message: 'Session and related attendance records deleted successfully.' });
+  } catch (err) {
+    await sessionTrans.abortTransaction();
+    sessionTrans.endSession();
+    console.error("deleteSession error:", err);
+    next(err);
+  }
+};
+
 module.exports = {
   createSession,
   endSession,
   resendAttendanceReport,
   getActiveSession,
   getSessionHistory,
+  deleteSession,
 };

@@ -6,6 +6,7 @@ const {
   resendAttendanceReport,
   getActiveSession,
   getSessionHistory,
+  deleteSession,
 } = require('../controllers/sessionController');
 const { protect, authorise, requireOnboardingComplete } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -33,5 +34,6 @@ router.get('/active', getActiveSession);
 router.get('/active/:subjectId', getActiveSession);
 router.get('/history', getSessionHistory);
 router.post('/:id/resend-report', resendAttendanceReport);
+router.delete('/:id', deleteSession);
 
 module.exports = router;
